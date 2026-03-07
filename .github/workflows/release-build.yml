@@ -13,8 +13,36 @@ permissions:
 
 jobs:
   build:
-    name: Build linux-amd64
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: linux_amd64
+            archive_ext: tar.gz
+            binary_name: kis
+          - name: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+            asset_name: macos_arm64
+            archive_ext: tar.gz
+            binary_name: kis
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: windows_x64
+            archive_ext: zip
+            binary_name: kis.exe
+          - name: windows-arm64
+            os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            asset_name: windows_arm64
+            archive_ext: zip
+            binary_name: kis.exe
 
     steps:
       - name: Checkout
@@ -35,6 +63,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
@@ -45,27 +75,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release
+          cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release --target "${{ matrix.target }}"
 
-      - name: Package archive
+      - name: Package archive (unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${{ inputs.release_tag }}"
           VERSION="${VERSION#v}"
-          ARCHIVE_NAME="kis_${VERSION}_linux_amd64"
+          ARCHIVE_NAME="kis_${VERSION}_${{ matrix.asset_name }}"
 
           mkdir staging
-          cp rust/target/release/kis staging/
+          cp "rust/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" staging/kis
           cp README.md staging/
           cp LICENSE staging/
           tar -czf "${ARCHIVE_NAME}.tar.gz" -C staging kis README.md LICENSE
 
+      - name: Package archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.release_tag }}".TrimStart("v")
+          $archiveName = "kis_${version}_${{ matrix.asset_name }}"
+
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Copy-Item "rust/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "staging/kis.exe"
+          Copy-Item "README.md" "staging/README.md"
+          Copy-Item "LICENSE" "staging/LICENSE"
+          Compress-Archive -Path "staging/*" -DestinationPath "${archiveName}.zip" -Force
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kis_linux_amd64
-          path: kis_*.tar.gz
+          name: kis_${{ matrix.asset_name }}
+          path: kis_*_${{ matrix.asset_name }}.${{ matrix.archive_ext }}
 
   release:
     name: Publish GitHub Release
@@ -86,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum *.tar.gz | sort -k2 > checksums.txt
+          sha256sum *.tar.gz *.zip | sort -k2 > checksums.txt
 
       - name: Create or update release
         shell: bash
