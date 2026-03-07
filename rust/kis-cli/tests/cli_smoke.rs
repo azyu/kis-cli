@@ -2,7 +2,7 @@ use std::fs;
 use std::process::Command as ProcessCommand;
 
 use clap::Parser;
-use kis_cli::cli::{BalanceArgs, BalanceCommand, Cli, Command, OrderCommand};
+use kis_cli::cli::{BalanceArgs, BalanceCommand, Cli, Command, OrderCommand, ReservationRegion, WsCommand};
 use kis_cli::render::{render_pairs, render_table};
 use tempfile::tempdir;
 
@@ -38,6 +38,41 @@ fn parses_balance_execution_command() {
     };
 
     assert!(matches!(command, Some(BalanceCommand::Executions(_))));
+}
+
+#[test]
+fn parses_balance_period_profit_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "balance",
+        "period-profit",
+        "--exchange",
+        "NASD",
+        "--currency",
+        "USD",
+        "--start",
+        "20260301",
+        "--end",
+        "20260307",
+    ])
+    .unwrap();
+
+    let Command::Balance(BalanceArgs { command }) = cli.command else {
+        panic!("expected balance command");
+    };
+
+    assert!(matches!(command, Some(BalanceCommand::PeriodProfit(_))));
+}
+
+#[test]
+fn parses_quote_overtime_ask_command() {
+    let cli = Cli::try_parse_from(["kis", "quote", "overtime-ask", "005930"]).unwrap();
+
+    let Command::Quote(args) = cli.command else {
+        panic!("expected quote command");
+    };
+
+    assert!(matches!(args.command, kis_cli::cli::QuoteCommand::OvertimeAsk(_)));
 }
 
 #[test]
@@ -148,6 +183,44 @@ fn parses_overseas_order_daytime_cancel_command() {
     };
 
     assert!(args.daytime);
+}
+
+#[test]
+fn parses_reserve_cancel_order_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "order",
+        "reserve-cancel",
+        "--region",
+        "us",
+        "--receipt-date",
+        "20260307",
+        "--reservation-order-no",
+        "0030008244",
+    ])
+    .unwrap();
+
+    let Command::Order(args) = cli.command else {
+        panic!("expected order command");
+    };
+
+    let OrderCommand::ReserveCancel(args) = args.command else {
+        panic!("expected reserve-cancel command");
+    };
+
+    assert_eq!(args.region, ReservationRegion::Us);
+    assert_eq!(args.receipt_date, "20260307");
+}
+
+#[test]
+fn parses_ws_approval_command() {
+    let cli = Cli::try_parse_from(["kis", "ws", "approval"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    assert!(matches!(args.command, WsCommand::Approval));
 }
 
 #[test]

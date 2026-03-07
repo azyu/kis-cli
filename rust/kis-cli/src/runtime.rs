@@ -4,9 +4,10 @@ use std::{
     error::Error as StdError,
     fmt::{Display, Formatter},
 };
+use std::time::Duration;
 
 use anyhow::{Context, Result};
-use kis_api::domestic::{balance, chart, finance, info, market, order, price, quote};
+use kis_api::domestic::{balance, chart, finance, info, market, order, overtime, price, quote};
 use kis_api::overseas::{
     self, balance as overseas_balance, exchange::OrderExchange, order as overseas_order,
 };
@@ -14,6 +15,7 @@ use kis_cli::{cli, render};
 use kis_core::client::KisClient;
 use kis_core::config::AppConfig;
 use kis_core::error::KisError;
+use kis_core::ws as kis_ws;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -145,6 +147,7 @@ pub async fn run(cli: cli::Cli, writer: &mut dyn Write) -> Result<()> {
         cli::Command::Market(args) => run_market(&runtime, args, writer).await,
         cli::Command::Finance(args) => run_finance(&runtime, args, writer).await,
         cli::Command::Info(args) => run_info(&runtime, args, writer).await,
+        cli::Command::Ws(args) => run_ws(&runtime, args, writer).await,
         cli::Command::Config => run_config(&runtime, writer),
     }
 }
@@ -278,6 +281,88 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
                 writer,
                 "\n총매도잔량: {}  총매수잔량: {}",
                 ask.total_askp_rsqn, ask.total_bidp_rsqn
+            )?;
+        }
+        cli::QuoteCommand::OvertimePrice(args) => {
+            let item = overtime::get_overtime_price(&runtime.client, "J", &args.stock).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &item);
+            }
+
+            let output = render::render_pairs(&[
+                ("종목명", display_or_dash(&item.bstp_kor_isnm)),
+                (
+                    "현재가",
+                    display_or_dash(&item.ovtm_untp_prpr),
+                ),
+                (
+                    "전일대비",
+                    format!(
+                        "{} {} ({}%)",
+                        price_sign(&item.ovtm_untp_prdy_vrss_sign),
+                        display_or_dash(&item.ovtm_untp_prdy_vrss),
+                        display_or_dash(&item.ovtm_untp_prdy_ctrt)
+                    ),
+                ),
+                ("시가", display_or_dash(&item.ovtm_untp_oprc)),
+                ("고가", display_or_dash(&item.ovtm_untp_hgpr)),
+                ("저가", display_or_dash(&item.ovtm_untp_lwpr)),
+                ("거래량", display_or_dash(&item.ovtm_untp_vol)),
+                ("거래대금", display_or_dash(&item.ovtm_untp_tr_pbmn)),
+                ("예상체결가", display_or_dash(&item.ovtm_untp_antc_cnpr)),
+                ("예상체결량", display_or_dash(&item.ovtm_untp_antc_cnqn)),
+                ("매도호가", display_or_dash(&item.askp)),
+                ("매수호가", display_or_dash(&item.bidp)),
+            ]);
+            writeln!(writer, "{output}")?;
+        }
+        cli::QuoteCommand::OvertimeAsk(args) => {
+            let ask = overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &ask);
+            }
+
+            let rows = [
+                vec![
+                    ask.ovtm_untp_askp_rsqn5,
+                    ask.ovtm_untp_askp5,
+                    ask.ovtm_untp_bidp5,
+                    ask.ovtm_untp_bidp_rsqn5,
+                ],
+                vec![
+                    ask.ovtm_untp_askp_rsqn4,
+                    ask.ovtm_untp_askp4,
+                    ask.ovtm_untp_bidp4,
+                    ask.ovtm_untp_bidp_rsqn4,
+                ],
+                vec![
+                    ask.ovtm_untp_askp_rsqn3,
+                    ask.ovtm_untp_askp3,
+                    ask.ovtm_untp_bidp3,
+                    ask.ovtm_untp_bidp_rsqn3,
+                ],
+                vec![
+                    ask.ovtm_untp_askp_rsqn2,
+                    ask.ovtm_untp_askp2,
+                    ask.ovtm_untp_bidp2,
+                    ask.ovtm_untp_bidp_rsqn2,
+                ],
+                vec![
+                    ask.ovtm_untp_askp_rsqn1,
+                    ask.ovtm_untp_askp1,
+                    ask.ovtm_untp_bidp1,
+                    ask.ovtm_untp_bidp_rsqn1,
+                ],
+            ];
+            let table =
+                render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows);
+            writeln!(writer, "{table}")?;
+            writeln!(
+                writer,
+                "\n시간: {}  총매도잔량: {}  총매수잔량: {}",
+                display_or_dash(&ask.ovtm_untp_last_hour),
+                display_or_dash(&ask.ovtm_untp_total_askp_rsqn),
+                display_or_dash(&ask.ovtm_untp_total_bidp_rsqn),
             )?;
         }
         cli::QuoteCommand::Ccnl(args) => {
@@ -760,6 +845,30 @@ async fn run_order(runtime: &Runtime, args: cli::OrderArgs, writer: &mut dyn Wri
                     result.order_time,
                 )?;
             }
+        }
+        cli::OrderCommand::ReserveCancel(args) => {
+            let request = overseas_balance::ReservationCancelRequest {
+                account_no: runtime.config.account_no.clone(),
+                account_prod: runtime.config.account_prod.clone(),
+                receipt_date: args.receipt_date,
+                reservation_order_no: args.reservation_order_no,
+            };
+            let result = overseas_balance::cancel_reservation_order(
+                &runtime.client,
+                args.region.code(),
+                &request,
+                is_virtual,
+            )
+            .await?;
+            let value = serde_json::to_value(&result)?;
+            if runtime.output_json {
+                return write_command_json(
+                    writer,
+                    runtime.command_name,
+                    &reserve_order_output("cancel", &value),
+                );
+            }
+            write_reserve_cancel_result(&value, runtime.quiet_text(), writer)?;
         }
     }
 
@@ -1478,26 +1587,60 @@ async fn run_balance(
             writeln!(writer, "{output}")?;
         }
         Some(cli::BalanceCommand::PsblBuy(args)) => {
-            let result = balance::get_possible_order(
-                &runtime.client,
-                &runtime.config.account_no,
-                &runtime.config.account_prod,
-                &args.stock,
-                &args.order_type,
-                &args.price,
-                runtime.config.environment.is_virtual(),
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &result);
+            if let Some(exchange) = args.exchange {
+                if args.price == "0" {
+                    return Err(validation_error(
+                        "--price is required for overseas possible-buy queries",
+                    ));
+                }
+
+                let result = overseas_balance::get_possible_buy_amount(
+                    &runtime.client,
+                    &runtime.config.account_no,
+                    &runtime.config.account_prod,
+                    &exchange,
+                    &args.price,
+                    &args.stock,
+                    runtime.config.environment.is_virtual(),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &result);
+                }
+                let output = render::render_pairs(&[
+                    ("거래통화", display_or_dash(&result.tr_crcy_cd)),
+                    ("주문가능외화", display_or_dash(&result.ord_psbl_frcr_amt)),
+                    ("재사용가능", display_or_dash(&result.sll_ruse_psbl_amt)),
+                    ("해외주문가능", display_or_dash(&result.ovrs_ord_psbl_amt)),
+                    ("주문가능수량", display_or_dash(&result.ord_psbl_qty)),
+                    ("최대주문가능수량", display_or_dash(&result.max_ord_psbl_qty)),
+                    ("환전후가능금액", display_or_dash(&result.echm_af_ord_psbl_amt)),
+                    ("환전후가능수량", display_or_dash(&result.echm_af_ord_psbl_qty)),
+                    ("환율", display_or_dash(&result.exrt)),
+                ]);
+                writeln!(writer, "{output}")?;
+            } else {
+                let result = balance::get_possible_order(
+                    &runtime.client,
+                    &runtime.config.account_no,
+                    &runtime.config.account_prod,
+                    &args.stock,
+                    &args.order_type,
+                    &args.price,
+                    runtime.config.environment.is_virtual(),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &result);
+                }
+                let output = render::render_pairs(&[
+                    ("주문가능현금", result.ord_psbl_cash),
+                    ("주문가능대용", result.ord_psbl_sbst),
+                    ("재사용가능", result.ruse_psbl_amt),
+                    ("미수없는매수", result.nrcvb_buy_amt),
+                ]);
+                writeln!(writer, "{output}")?;
             }
-            let output = render::render_pairs(&[
-                ("주문가능현금", result.ord_psbl_cash),
-                ("주문가능대용", result.ord_psbl_sbst),
-                ("재사용가능", result.ruse_psbl_amt),
-                ("미수없는매수", result.nrcvb_buy_amt),
-            ]);
-            writeln!(writer, "{output}")?;
         }
         Some(cli::BalanceCommand::PsblSell(args)) => {
             let result = balance::get_possible_sell(
@@ -1517,6 +1660,233 @@ async fn run_balance(
                 ("매도가능수량", result.ord_psbl_qty),
                 ("매입평균가", result.pchs_avg_pric),
             ]);
+            writeln!(writer, "{output}")?;
+        }
+        Some(cli::BalanceCommand::PeriodProfit(args)) => {
+            let result = overseas_balance::get_period_profit(
+                &runtime.client,
+                &runtime.config.account_no,
+                &runtime.config.account_prod,
+                &args.exchange,
+                args.country.as_deref().unwrap_or(""),
+                &args.currency,
+                &args.stock,
+                &args.start,
+                &args.end,
+                &args.currency_type,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_rows(
+                &value,
+                "items",
+                &[
+                    "trad_day",
+                    "ovrs_pdno",
+                    "ovrs_excg_cd",
+                    "slcl_qty",
+                    "pchs_avg_pric",
+                    "avg_sll_unpr",
+                    "ovrs_rlzt_pfls_amt",
+                    "pftrt",
+                ],
+            );
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("총매수", "stck_buy_amt_smtl"),
+                    ("총매도", "stck_sll_amt_smtl"),
+                    ("총손익", "ovrs_rlzt_pfls_tot_amt"),
+                    ("총수익률", "tot_pftrt"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "거래일",
+                        "종목코드",
+                        "거래소",
+                        "수량",
+                        "평균매입가",
+                        "평균매도가",
+                        "실현손익",
+                        "수익률",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        Some(cli::BalanceCommand::PeriodTrans(args)) => {
+            let result = overseas_balance::get_period_transactions(
+                &runtime.client,
+                &runtime.config.account_no,
+                &runtime.config.account_prod,
+                &args.start,
+                &args.end,
+                &args.exchange,
+                &args.stock,
+                &args.side,
+                &args.loan_type,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_rows(
+                &value,
+                "items",
+                &[
+                    "trad_dt",
+                    "sttl_dt",
+                    "sll_buy_dvsn_name",
+                    "pdno",
+                    "ovrs_item_name",
+                    "ccld_qty",
+                    "ovrs_stck_ccld_unpr",
+                    "tr_frcr_amt2",
+                    "crcy_cd",
+                ],
+            );
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("총매수", "frcr_buy_amt_smtl"),
+                    ("총매도", "frcr_sll_amt_smtl"),
+                    ("국내수수료", "dmst_fee_smtl"),
+                    ("해외수수료", "ovrs_fee_smtl"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "거래일",
+                        "결제일",
+                        "구분",
+                        "종목코드",
+                        "종목명",
+                        "체결수량",
+                        "체결단가",
+                        "거래금액",
+                        "통화",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        Some(cli::BalanceCommand::AlgoExecutions(args)) => {
+            let result = overseas_balance::get_algo_executions(
+                &runtime.client,
+                &runtime.config.account_no,
+                &runtime.config.account_prod,
+                &args.date,
+                &args.org_no,
+                &args.order_no,
+                &args.totalize,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_rows(
+                &value,
+                "items",
+                &[
+                    "odno",
+                    "pdno",
+                    "item_name",
+                    "ft_ord_qty",
+                    "ft_ccld_qty",
+                    "ft_ccld_unpr3",
+                    "ft_ccld_amt3",
+                    "ord_tmd",
+                    "trad_dvsn_name",
+                ],
+            );
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("체결건수", "ccld_cnt"), ("통화", "tr_crcy")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "주문번호",
+                        "종목코드",
+                        "종목명",
+                        "주문수량",
+                        "체결수량",
+                        "체결단가",
+                        "체결금액",
+                        "주문시각",
+                        "구분",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        Some(cli::BalanceCommand::ReserveOrders(args)) => {
+            let result = overseas_balance::get_reservation_orders(
+                &runtime.client,
+                args.region.code(),
+                &runtime.config.account_no,
+                &runtime.config.account_prod,
+                &args.start,
+                &args.end,
+                &args.inquiry,
+                &args.exchange,
+                &args.product_type,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_rows(
+                &value,
+                "$root",
+                &[
+                    "rsvn_ord_rcit_dt",
+                    "ovrs_rsvn_odno",
+                    "pdno",
+                    "prdt_name",
+                    "sll_buy_dvsn_cd_name",
+                    "ovrs_rsvn_ord_stat_cd_name",
+                    "ft_ord_qty",
+                    "ft_ord_unpr3",
+                    "ovrs_excg_cd",
+                ],
+            );
+            let output = render::render_table(
+                &[
+                    "접수일자",
+                    "예약주문번호",
+                    "종목코드",
+                    "종목명",
+                    "구분",
+                    "상태",
+                    "주문수량",
+                    "주문단가",
+                    "거래소",
+                ],
+                &rows,
+            );
             writeln!(writer, "{output}")?;
         }
         Some(cli::BalanceCommand::Executions(args)) => {
@@ -1894,6 +2264,175 @@ async fn run_info(runtime: &Runtime, args: cli::InfoArgs, writer: &mut dyn Write
     Ok(())
 }
 
+async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) -> Result<()> {
+    match args.command {
+        cli::WsCommand::Approval => {
+            let approval = kis_ws::fetch_approval_key(&runtime.config).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &approval);
+            }
+
+            let output =
+                render::render_pairs(&[("approval_key", display_or_dash(&approval.approval_key))]);
+            writeln!(writer, "{output}")?;
+        }
+        cli::WsCommand::OvertimeAsk(args) => {
+            let payloads = kis_ws::collect_realtime_messages(
+                &runtime.config,
+                kis_ws::domestic_overtime_asking_price_spec(),
+                &args.stock,
+                args.count,
+                Duration::from_secs(args.timeout_secs),
+                args.reconnects,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &payloads);
+            }
+            write_ws_overtime_ask(writer, &payloads)?;
+        }
+        cli::WsCommand::OvertimeCcnl(args) => {
+            let payloads = kis_ws::collect_realtime_messages(
+                &runtime.config,
+                kis_ws::domestic_overtime_ccnl_spec(),
+                &args.stock,
+                args.count,
+                Duration::from_secs(args.timeout_secs),
+                args.reconnects,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &payloads);
+            }
+            write_ws_overtime_ccnl(writer, &payloads)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_ws_overtime_ask(
+    writer: &mut dyn Write,
+    payloads: &[kis_ws::RealtimePayload],
+) -> Result<()> {
+    let mut wrote_any = false;
+
+    for (index, payload) in payloads.iter().enumerate() {
+        for row in &payload.rows {
+            if wrote_any {
+                writeln!(writer)?;
+            }
+            if payloads.len() > 1 {
+                writeln!(writer, "message {}", index + 1)?;
+            }
+            let rows = [
+                vec![
+                    realtime_cell(row, "askp_rsqn5"),
+                    realtime_cell(row, "askp5"),
+                    realtime_cell(row, "bidp5"),
+                    realtime_cell(row, "bidp_rsqn5"),
+                ],
+                vec![
+                    realtime_cell(row, "askp_rsqn4"),
+                    realtime_cell(row, "askp4"),
+                    realtime_cell(row, "bidp4"),
+                    realtime_cell(row, "bidp_rsqn4"),
+                ],
+                vec![
+                    realtime_cell(row, "askp_rsqn3"),
+                    realtime_cell(row, "askp3"),
+                    realtime_cell(row, "bidp3"),
+                    realtime_cell(row, "bidp_rsqn3"),
+                ],
+                vec![
+                    realtime_cell(row, "askp_rsqn2"),
+                    realtime_cell(row, "askp2"),
+                    realtime_cell(row, "bidp2"),
+                    realtime_cell(row, "bidp_rsqn2"),
+                ],
+                vec![
+                    realtime_cell(row, "askp_rsqn1"),
+                    realtime_cell(row, "askp1"),
+                    realtime_cell(row, "bidp1"),
+                    realtime_cell(row, "bidp_rsqn1"),
+                ],
+            ];
+            writeln!(
+                writer,
+                "{}",
+                render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows)
+            )?;
+            writeln!(
+                writer,
+                "\n시각: {}  총매도잔량: {}  총매수잔량: {}  예상체결가: {}",
+                realtime_cell(row, "bsop_hour"),
+                realtime_cell(row, "ovtm_total_askp_rsqn"),
+                realtime_cell(row, "ovtm_total_bidp_rsqn"),
+                realtime_cell(row, "antc_cnpr"),
+            )?;
+            wrote_any = true;
+        }
+    }
+
+    if !wrote_any {
+        writeln!(writer, "데이터가 없습니다.")?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_overtime_ccnl(
+    writer: &mut dyn Write,
+    payloads: &[kis_ws::RealtimePayload],
+) -> Result<()> {
+    let rows = payloads
+        .iter()
+        .flat_map(|payload| payload.rows.iter())
+        .map(|row| {
+            vec![
+                realtime_cell(row, "stck_cntg_hour"),
+                realtime_cell(row, "stck_prpr"),
+                format!(
+                    "{} {} ({}%)",
+                    price_sign(&realtime_cell(row, "prdy_vrss_sign")),
+                    realtime_cell(row, "prdy_vrss"),
+                    realtime_cell(row, "prdy_ctrt")
+                ),
+                realtime_cell(row, "cntg_vol"),
+                realtime_cell(row, "acml_vol"),
+                realtime_cell(row, "cttr"),
+                realtime_cell(row, "askp1"),
+                realtime_cell(row, "bidp1"),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    if rows.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    writeln!(
+        writer,
+        "{}",
+        render::render_table(
+            &[
+                "시각",
+                "현재가",
+                "전일대비",
+                "체결량",
+                "누적거래량",
+                "체결강도",
+                "매도1",
+                "매수1",
+            ],
+            &rows,
+        )
+    )?;
+
+    Ok(())
+}
+
 fn run_config(runtime: &Runtime, writer: &mut dyn Write) -> Result<()> {
     if runtime.output_json {
         return write_command_json(
@@ -2030,6 +2569,27 @@ fn write_reserve_order_result(
     Ok(())
 }
 
+fn write_reserve_cancel_result(value: &Value, quiet: bool, writer: &mut dyn Write) -> Result<()> {
+    let output = reserve_order_output("cancel", value);
+
+    if !quiet {
+        writeln!(writer, "예약주문 취소 완료")?;
+    }
+    writeln!(
+        writer,
+        "{}",
+        render::render_pairs(&[
+            ("주문번호", display_or_dash(&output.order_no)),
+            ("접수일자", display_or_dash(&output.receipt_date)),
+            (
+                "예약주문번호",
+                display_or_dash(&output.reservation_order_no)
+            ),
+        ])
+    )?;
+    Ok(())
+}
+
 fn write_overseas_reserve_result<T>(
     side_json: &'static str,
     side_text: &str,
@@ -2140,6 +2700,18 @@ fn json_cell(row: &serde_json::Map<String, Value>, field: &str) -> String {
             Value::Number(value) => value.to_string(),
             Value::Bool(value) => value.to_string(),
             _ => value.to_string(),
+        })
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn realtime_cell(row: &kis_ws::RealtimeRow, field: &str) -> String {
+    row.get(field)
+        .map(|value| {
+            if value.is_empty() {
+                "-".to_string()
+            } else {
+                value.to_string()
+            }
         })
         .unwrap_or_else(|| "-".to_string())
 }

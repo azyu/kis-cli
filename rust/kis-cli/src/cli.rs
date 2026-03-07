@@ -86,6 +86,8 @@ pub enum Command {
     Finance(FinanceArgs),
     #[command(about = "기업 정보 - 배당, 뉴스, 투자의견, 종목검색")]
     Info(InfoArgs),
+    #[command(about = "WebSocket - 접속키 발급 및 실시간 시세")]
+    Ws(WsArgs),
     #[command(about = "설정 관리 - 설정 파일 조회 및 수정")]
     Config,
 }
@@ -101,6 +103,7 @@ impl Command {
             Self::Market(_) => "market",
             Self::Finance(_) => "finance",
             Self::Info(_) => "info",
+            Self::Ws(_) => "ws",
             Self::Config => "config",
         }
     }
@@ -135,6 +138,10 @@ pub struct QuoteArgs {
 pub enum QuoteCommand {
     #[command(about = "호가 조회 (매수/매도 호가잔량)")]
     Ask(SymbolArgs),
+    #[command(about = "시간외 현재가 조회")]
+    OvertimePrice(SymbolArgs),
+    #[command(about = "시간외 호가 조회")]
+    OvertimeAsk(SymbolArgs),
     #[command(about = "체결 조회 (최근 거래 내역)")]
     Ccnl(SymbolArgs),
     #[command(about = "투자자별 매매동향")]
@@ -222,6 +229,8 @@ pub enum OrderCommand {
     Modify(ModifyOrderArgs),
     #[command(about = "주문 취소")]
     Cancel(CancelOrderArgs),
+    #[command(about = "해외 예약주문 취소")]
+    ReserveCancel(ReserveCancelOrderArgs),
 }
 
 #[derive(Debug, Args)]
@@ -329,6 +338,18 @@ pub struct CancelOrderArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ReserveCancelOrderArgs {
+    #[arg(long, value_enum, default_value_t = ReservationRegion::Us, help = "예약주문 지역 구분")]
+    pub region: ReservationRegion,
+
+    #[arg(long = "receipt-date", required = true, help = "예약주문 접수일자 (YYYYMMDD)")]
+    pub receipt_date: String,
+
+    #[arg(long = "reservation-order-no", required = true, help = "해외 예약주문번호")]
+    pub reservation_order_no: String,
+}
+
+#[derive(Debug, Args)]
 pub struct BalanceArgs {
     #[command(subcommand)]
     pub command: Option<BalanceCommand>,
@@ -340,6 +361,14 @@ pub enum BalanceCommand {
     PsblBuy(PossibleBuyArgs),
     #[command(about = "매도가능수량 조회")]
     PsblSell(PossibleSellArgs),
+    #[command(about = "해외주식 기간손익 조회")]
+    PeriodProfit(OverseasPeriodProfitArgs),
+    #[command(about = "해외주식 일별거래내역 조회")]
+    PeriodTrans(OverseasPeriodTransArgs),
+    #[command(about = "해외주식 지정가체결내역 조회")]
+    AlgoExecutions(OverseasAlgoExecutionsArgs),
+    #[command(about = "해외주식 예약주문 조회")]
+    ReserveOrders(ReservationOrderListArgs),
     #[command(about = "일별체결내역 조회")]
     Executions(ExecutionArgs),
     #[command(about = "해외주식 잔고 조회")]
@@ -359,6 +388,13 @@ pub struct PossibleBuyArgs {
     #[arg(help = "종목코드")]
     pub stock: String,
 
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 주문 거래소 코드 (NASD, NYSE, AMEX, SEHK, SHAA, SZAA, TKSE, HASE, VNSE)"
+    )]
+    pub exchange: Option<String>,
+
     #[arg(long, default_value = "0", help = "주문단가")]
     pub price: String,
 
@@ -368,6 +404,117 @@ pub struct PossibleBuyArgs {
         help = "주문구분 (00:지정가, 01:시장가)"
     )]
     pub order_type: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ReservationRegion {
+    Us,
+    Asia,
+}
+
+impl ReservationRegion {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Us => "us",
+            Self::Asia => "asia",
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasPeriodProfitArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (예: NASD, SEHK, SHAA, TKSE, HASE)"
+    )]
+    pub exchange: String,
+
+    #[arg(long, required = true, help = "통화코드 (USD, HKD, CNY, JPY, VND)")]
+    pub currency: String,
+
+    #[arg(long, help = "국가코드 (기본: 공란)")]
+    pub country: Option<String>,
+
+    #[arg(long, default_value = "", help = "종목코드 (기본: 전체)")]
+    pub stock: String,
+
+    #[arg(long, required = true, help = "조회시작일 (YYYYMMDD)")]
+    pub start: String,
+
+    #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
+    pub end: String,
+
+    #[arg(long = "currency-type", default_value = "01", help = "원화외화구분코드")]
+    pub currency_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasPeriodTransArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (예: NAS, HKS, SHS, TSE)"
+    )]
+    pub exchange: String,
+
+    #[arg(long, required = true, help = "조회시작일 (YYYYMMDD)")]
+    pub start: String,
+
+    #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
+    pub end: String,
+
+    #[arg(long, default_value = "", help = "종목코드 (기본: 전체)")]
+    pub stock: String,
+
+    #[arg(long = "side", default_value = "00", help = "매도매수구분 (00:전체, 01:매도, 02:매수)")]
+    pub side: String,
+
+    #[arg(long = "loan-type", default_value = "", help = "대출구분코드")]
+    pub loan_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasAlgoExecutionsArgs {
+    #[arg(long = "date", default_value = "", help = "주문일자 (YYYYMMDD)")]
+    pub date: String,
+
+    #[arg(long = "org-no", default_value = "", help = "주문채번지점번호")]
+    pub org_no: String,
+
+    #[arg(long = "order-no", default_value = "", help = "주문번호")]
+    pub order_no: String,
+
+    #[arg(long = "totalize", default_value = "", help = "집계포함여부")]
+    pub totalize: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ReservationOrderListArgs {
+    #[arg(long, value_enum, default_value_t = ReservationRegion::Us, help = "예약주문 지역 구분")]
+    pub region: ReservationRegion,
+
+    #[arg(long, required = true, help = "조회시작일 (YYYYMMDD)")]
+    pub start: String,
+
+    #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
+    pub end: String,
+
+    #[arg(long = "inquiry", default_value = "00", help = "조회구분코드")]
+    pub inquiry: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 주문 거래소 코드 (NASD, NYSE, AMEX, SEHK, SHAA, SZAA, TKSE, HASE, VNSE)"
+    )]
+    pub exchange: String,
+
+    #[arg(long = "product-type", default_value = "", help = "상품유형코드")]
+    pub product_type: String,
 }
 
 #[derive(Debug, Args)]
@@ -552,13 +699,44 @@ pub struct SearchArgs {
     pub keyword: String,
 }
 
+#[derive(Debug, Args)]
+pub struct WsArgs {
+    #[command(subcommand)]
+    pub command: WsCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WsCommand {
+    #[command(about = "WebSocket approval key 발급")]
+    Approval,
+    #[command(about = "국내 시간외 실시간호가 구독")]
+    OvertimeAsk(WsStreamArgs),
+    #[command(about = "국내 시간외 실시간체결가 구독")]
+    OvertimeCcnl(WsStreamArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct WsStreamArgs {
+    #[arg(help = "종목코드")]
+    pub stock: String,
+
+    #[arg(long, default_value_t = 1, help = "수집할 메시지 개수")]
+    pub count: usize,
+
+    #[arg(long = "timeout-secs", default_value_t = 30, help = "연결/수신 타임아웃(초)")]
+    pub timeout_secs: u64,
+
+    #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]
+    pub reconnects: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
 
     use super::{
         BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand, InfoCommand,
-        MarketCommand, OrderCommand, OutputFormat, QuoteCommand,
+        MarketCommand, OrderCommand, OutputFormat, QuoteCommand, ReservationRegion, WsCommand,
     };
 
     #[test]
@@ -896,6 +1074,97 @@ mod tests {
         };
 
         assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_quote_overtime_price_command() {
+        let cli = Cli::try_parse_from(["kis", "quote", "overtime-price", "005930"]).unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::OvertimePrice(args) = args.command else {
+            panic!("expected quote overtime-price command");
+        };
+
+        assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_overseas_possible_buy_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "balance",
+            "psbl-buy",
+            "QQQ",
+            "--exchange",
+            "NASD",
+            "--price",
+            "1.4",
+        ])
+        .unwrap();
+        let Command::Balance(BalanceArgs { command }) = cli.command else {
+            panic!("expected balance command");
+        };
+        let Some(BalanceCommand::PsblBuy(args)) = command else {
+            panic!("expected balance psbl-buy");
+        };
+
+        assert_eq!(args.stock, "QQQ");
+        assert_eq!(args.exchange.as_deref(), Some("NASD"));
+        assert_eq!(args.price, "1.4");
+    }
+
+    #[test]
+    fn parses_reserve_cancel_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "order",
+            "reserve-cancel",
+            "--region",
+            "us",
+            "--receipt-date",
+            "20260307",
+            "--reservation-order-no",
+            "0030008244",
+        ])
+        .unwrap();
+
+        let Command::Order(order) = cli.command else {
+            panic!("expected order command");
+        };
+        let OrderCommand::ReserveCancel(args) = order.command else {
+            panic!("expected reserve-cancel command");
+        };
+
+        assert_eq!(args.region, ReservationRegion::Us);
+        assert_eq!(args.receipt_date, "20260307");
+        assert_eq!(args.reservation_order_no, "0030008244");
+    }
+
+    #[test]
+    fn parses_ws_overtime_ask_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "overtime-ask",
+            "005930",
+            "--count",
+            "2",
+            "--timeout-secs",
+            "10",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::OvertimeAsk(args) = args.command else {
+            panic!("expected ws overtime-ask command");
+        };
+
+        assert_eq!(args.stock, "005930");
+        assert_eq!(args.count, 2);
+        assert_eq!(args.timeout_secs, 10);
     }
 
     #[test]

@@ -80,6 +80,8 @@ kis price --exchange NYS MSFT
 
 ```bash
 kis quote ask 005930
+kis quote overtime-price 005930
+kis quote overtime-ask 005930
 kis quote ccnl 005930
 kis chart daily 005930 --start 20260101 --end 20260306
 kis chart time 005930 --unit 5
@@ -99,6 +101,7 @@ kis order cancel --order-no 0000123456
 kis order buy --exchange NASD --stock AAPL --qty 1 --price 200
 kis order buy --exchange NASD --stock AAPL --qty 1 --price 200 --reserve
 kis order buy --exchange NASD --stock AAPL --qty 1 --price 200 --daytime --env real
+kis order reserve-cancel --region us --receipt-date 20260307 --reservation-order-no 0030008244
 ```
 
 ### 잔고 / 체결
@@ -106,14 +109,27 @@ kis order buy --exchange NASD --stock AAPL --qty 1 --price 200 --daytime --env r
 ```bash
 kis balance
 kis balance psbl-buy 005930 --price 70000
+kis balance psbl-buy QQQ --exchange NASD --price 1.4
 kis balance psbl-sell 005930
 kis balance executions --start 20260301 --end 20260306
 
 kis balance overseas --exchange NASD --currency USD
-kis balance present --exchange NASD --currency USD
-kis balance settlement --exchange NASD --currency USD
+kis balance present --currency-type 02 --country 000 --market 00 --inquiry 00
+kis balance settlement --date 20260307 --currency-type 01 --inquiry 00
 kis balance ovrs-executions --start 20260301 --end 20260306 --exchange NASD
 kis balance open-orders --exchange NASD
+kis balance period-profit --exchange NASD --currency USD --start 20260301 --end 20260307
+kis balance period-trans --exchange NAS --start 20260301 --end 20260307
+kis balance algo-executions --date 20260307
+kis balance reserve-orders --region us --start 20260301 --end 20260307 --exchange NASD
+```
+
+### WebSocket
+
+```bash
+kis ws approval
+kis ws overtime-ask 005930 --count 1
+kis ws overtime-ccnl 005930 --count 3
 ```
 
 ### 재무 / 기업정보 / 시장현황
@@ -171,13 +187,14 @@ kis config --quiet
 ## 지원 표면
 
 - `price`: 국내 현재가/일별시세, 해외 현재가
-- `quote`: 호가, 체결, 투자자, 회원사
+- `quote`: 호가, 시간외 현재가/호가, 체결, 투자자, 회원사
 - `chart`: 일별 차트, 분별 차트, 지수 차트, 지수 현재가
-- `order`: 국내 매수/매도/정정/취소, 해외 매수/매도/정정/취소, 해외 예약주문, 미국 주간주문/정정/취소
-- `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결
+- `order`: 국내 매수/매도/정정/취소, 해외 매수/매도/정정/취소, 해외 예약주문, 예약취소, 미국 주간주문/정정/취소
+- `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결, 매수가능금액, 기간손익/기간거래, 지정가체결, 예약주문 조회
 - `market`: 거래량 순위, 휴장일
 - `finance`: 재무상태표, 손익계산서, 재무비율
 - `info`: 배당정보, 뉴스, 투자의견, 종목검색
+- `ws`: approval key 발급, 국내 시간외 실시간 호가/체결
 - `config`: 현재 설정 출력
 
 모의투자(`virtual`)에서는 일부 국내 읽기 API가 KIS 측 제한으로 `404` 또는 `EGW2004`를 반환할 수 있습니다.

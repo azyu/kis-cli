@@ -2,19 +2,17 @@
 
 ## Current Direction
 
-저장소는 Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 config/auth/client, 국내 price/order/balance/read APIs, 해외 price/order/balance/execution, 해외 예약주문/미국 주간주문, config 출력을 지원한다. 검증은 `cargo test --manifest-path rust/Cargo.toml -p kis-cli` 기준으로 유지한다.
+저장소는 Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 config/auth/client, 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력을 지원한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
 
 Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다.
 
 ## Priorities
 
-1. 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`)
-2. 해외주식 매수가능금액 조회 (`inquire_psamount`)
-3. WebSocket approval + 실시간 시세 1차 (`overtime_asking_price_krx`, `overtime_ccnl_krx` 포함)
-4. 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, 예약주문 조회)
-5. 해외 REST/CLI 회귀 테스트 및 pagination mock 검증
-6. `ratatui` 필요성 재평가 (`kis tui`는 후속)
-7. agent-friendly CLI 계약 1차 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run`)
+1. 해외주식 시세/시장정보 2차 (`dailyprice`, `inquire-asking-price`, chart/search/ranking 계열)
+2. E2E 통합 테스트 (모의투자) 및 live smoke 기준 정리
+3. `ratatui` 필요성 재평가 (`kis tui`는 후속)
+4. WebSocket 표면 확대 여부 재평가 (정규장 시세/체결, 다중 구독 UX)
+5. agent-friendly CLI 계약 후속 정리 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run` 이후 문서 동기화)
 
 ## Agent Assignment
 
@@ -36,6 +34,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - pagination이 필요한 해외 잔고/체결 API는 `tr_cont`/`CTX_AREA_*` 처리를 공통화한 뒤 붙인다
 - WebSocket은 REST 마일스톤과 분리하고, `/oauth2/Approval` 발급을 Core 선행 작업으로 둔다
 - 리뷰에서 확정된 결함은 새 기능보다 우선해서 재현 테스트를 추가한 뒤 수정한다
+- 2026-03-07 현재 배치는 `rust/kis-api/src/domestic/*` 시간외 REST, `rust/kis-api/src/overseas/balance.rs` 계좌 조회 2차/매수가능금액, `rust/kis-core/src/*` WebSocket approval/client, `rust/kis-cli/src/*` CLI/runtime/test 확장 순서로 진행한다
 
 ## Blockers
 
@@ -89,3 +88,5 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-07: agent-friendly CLI 계약 1차는 별도 `agent` 서브커맨드 없이 기존 `kis` 표면을 유지한 채 `--output text|json`, 공통 JSON success/error envelope, `--quiet`, 주문 `--dry-run`을 추가하는 범위로 진행한다.
 - 2026-03-07: agent-friendly CLI 계약 1차 구현을 완료했다. JSON 모드는 성공/실패 모두 `{ok, command, data|error}` envelope를 stdout으로 출력하고, 주문 계열은 `--dry-run`으로 endpoint/TR ID/request payload를 검증할 수 있으며 관련 parser/runtime/smoke test를 `cargo test --manifest-path rust/Cargo.toml -p kis-cli`로 고정했다.
 - 2026-03-07: 설치된 `rust-cli` skill 문서는 base guidance를 유지하되, `kis`에서 검증된 output-mode resolution, machine-readable error contract, secret redaction, side-effecting command `--dry-run` 패턴을 선택적 일반 규칙으로 반영한다. `rust-cli-kis-style`과 reference 문서는 현재 `--output`/JSON error envelope 계약에 맞춰 동기화한다.
+- 2026-03-07: 국내 시간외 REST 1차(`inquire_overtime_price`, `inquire_overtime_asking_price`)와 해외 계좌 조회 2차(`inquire_psamount`, `inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`)를 Rust domain/CLI에 추가했다.
+- 2026-03-07: `kis ws` 1차로 `/oauth2/Approval` 발급과 국내 시간외 실시간 호가/체결 (`H0STOAA0`, `H0STOUP0`) 수집을 추가했다. 현재 CLI는 count-limited collect + 기본 재연결 + best-effort unsubscribe 모델을 사용한다.

@@ -63,14 +63,14 @@
 ## Backlog
 - [ ] 해외주식 주문 API 구현 — Agent: Domain
 - [ ] 해외주식 잔고/체결 API 구현 — Agent: Domain
-- [ ] 시간외 거래 API 구현 — Agent: Domain
+- [~] 시간외 거래 API 구현 — Agent: Main
 - [ ] WebSocket 실시간 시세 — Agent: Core
 - [ ] E2E 통합 테스트 (모의투자) — Agent: Quality
 - [ ] ratatui 기반 TUI (`kis tui`) 검토 및 도입 — Agent: CLI
-- [ ] 해외주식 매수가능금액 조회 (`inquire_psamount`) — Agent: Domain
-- [ ] 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`) — Agent: Domain
-- [ ] 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`) — Agent: Domain
+- [x] 해외주식 매수가능금액 조회 (`inquire_psamount`) — Agent: Main
+- [x] 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`) — Agent: Main
+- [x] 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`) — Agent: Main
 - [ ] 해외주식 시세/시장정보 2차 (`dailyprice`, `inquire-asking-price`, chart/search/ranking 계열) — Agent: Domain
-- [ ] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Core
-- [ ] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Core
-- [ ] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Quality
+- [x] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Main
+- [x] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Main
+- [x] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Main
