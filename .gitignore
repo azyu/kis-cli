@@ -1,0 +1,37 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/kis-cli
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets and credentials - NEVER commit these
+.env
+.env.*
+*.pem
+*.key
+
+# KIS config files containing secrets
+kis_devlp.yaml
+kis_prod.yaml
+config.yaml
+
+# Token cache
+.KIS/
+token_*.json
+access_token*
+
+# Rust workspace
+rust/target/

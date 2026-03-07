@@ -1,0 +1,91 @@
+# Steering
+
+## Current Direction
+
+저장소는 Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 config/auth/client, 국내 price/order/balance/read APIs, 해외 price/order/balance/execution, 해외 예약주문/미국 주간주문, config 출력을 지원한다. 검증은 `cargo test --manifest-path rust/Cargo.toml -p kis-cli` 기준으로 유지한다.
+
+Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다.
+
+## Priorities
+
+1. 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`)
+2. 해외주식 매수가능금액 조회 (`inquire_psamount`)
+3. WebSocket approval + 실시간 시세 1차 (`overtime_asking_price_krx`, `overtime_ccnl_krx` 포함)
+4. 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, 예약주문 조회)
+5. 해외 REST/CLI 회귀 테스트 및 pagination mock 검증
+6. `ratatui` 필요성 재평가 (`kis tui`는 후속)
+7. agent-friendly CLI 계약 1차 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run`)
+
+## Agent Assignment
+
+| Agent | 담당 영역 | 현재 상태 |
+|-------|----------|----------|
+| Core | `rust/kis-core/`, `rust/Cargo.toml`, `rust/kis-api/src/client.rs` | Rust-only 기준 유지 |
+| Domain | `rust/kis-api/src/overseas/`, `rust/kis-api/src/domestic/` | 다음 API 확장 대기 |
+| CLI | `rust/kis-cli/` | `kis` 표면 유지 및 문서 정리 |
+| Quality | `rust/*/tests`, Rust 테스트 모듈, CI | Go 제거 후 회귀 검증 |
+
+## Coordination Rules
+
+- 한 에이전트가 여러 역할을 겸할 수 있으나, 작업 시작 시 TASKS.md에 진행 상태를 기록한다
+- 동일 파일을 두 에이전트가 동시에 수정하지 않는다
+- 의존성이 있는 작업은 순서를 지킨다: Core -> Domain -> CLI -> Quality
+- Rust CLI는 `kis`를 공식 바이너리 이름으로 사용한다
+- Rust-only 저장소 기준을 유지하고, 삭제된 Go 경로를 다시 참조하지 않는다
+- 주문용 거래소 코드(`NASD`, `NYSE` 등)와 시세용 거래소 코드(`NAS`, `NYS` 등)를 동일 타입으로 섞지 않는다
+- pagination이 필요한 해외 잔고/체결 API는 `tr_cont`/`CTX_AREA_*` 처리를 공통화한 뒤 붙인다
+- WebSocket은 REST 마일스톤과 분리하고, `/oauth2/Approval` 발급을 Core 선행 작업으로 둔다
+- 리뷰에서 확정된 결함은 새 기능보다 우선해서 재현 테스트를 추가한 뒤 수정한다
+
+## Blockers
+
+- 모의투자 `inquire-psbl-sell` 호출은 2026-03-06 실측 기준 `OPSQ0002` (`없는 서비스 코드 입니다`)를 반환한다. 구현은 KIS 오류를 그대로 surface 하며, 모의투자 지원 여부는 후속 확인이 필요하다.
+- 모의투자 도메인에서 일부 국내 읽기 API는 실측 기준 지원되지 않는다. `quote ask`는 `404 Not Found`, `market holiday`/`info search`는 `EGW2004` (`모의투자 TR 이 아닙니다.`)를 반환했다.
+- 해외 주문/잔고 계열은 Rust 구현 기준으로도 payload shape와 모의투자 지원 여부를 단계별로 검증해야 한다.
+- 미국 주간주문/정정취소는 공식 예제 기준 실전 TR ID만 확인된다. 모의투자 TR ID는 추정하지 말고 명시적으로 거절한다.
+- `overtime_ccnl_krx`는 open-trading-api 예제 기준 WebSocket 실시간 체결(TR `H0STOUP0`)만 확인된다. REST 마일스톤에 섞지 않는다.
+
+## Decisions Log
+
+- 2026-03-07: 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 전환하고, 기존 `~/.kis/config.yaml` fallback은 두지 않는다. 이번 변경 범위는 설정 파일 경로에 한정하고 토큰 캐시는 유지한다.
+- 2026-03-07: README는 공개 사용자 문서 기준으로 Rust CLI(`kis`)만 설명하고, Go reference 관련 내용은 제거한다.
+- 2026-03-07: GitHub 공개 준비를 위해 기존 히스토리를 단일 루트 커밋으로 재작성한 뒤 `origin`에 초기 push 하기로 결정했다.
+- 2026-03-05: AGENTS.md + CLAUDE.md(symlink), .claude/TASKS.md, .claude/STEERING.md 체계 확립
+- 2026-03-05: 6개 skill 설치 (golang-architect, golang-cli-cobra-viper, go-testing-code-review, api-design, api-security-hardening, conventional-commit)
+- 2026-03-05: Go 프로젝트 초기화 완료 - Go module/Cobra CLI(root/price/order/balance/config), Viper config(~/.kis/config.yaml), .gitignore를 구성했다.
+- 2026-03-05: Domain 에이전트 - client.APIClient 인터페이스 정의, 국내주식 현재가/일별시세 API 구현, 해외주식 현재가 API 구현, price CLI 명령어 연동 (stubClient 사용)
+- 2026-03-05: Core 에이전트 - OAuth TokenManager 구현 (토큰 발급/캐싱/만료관리), KISClient 구현 (공통헤더/Rate Limiting/Hashkey), stubClient 교체 완료
+- 2026-03-06: Rust 병행 마이그레이션 시작 - 동일 저장소 내 `rust/` workspace 추가, 1차 범위는 `clap` 기반 CLI parity에 한정
+- 2026-03-06: `ratatui`는 설치만 완료하고 1차 구현에서는 제외, 필요 시 `kis tui` 서브커맨드로 후속 도입
+- 2026-03-06: Rust 1차 구현 완료 - `kis-rs` 바이너리, `kis-core`/`kis-api`/`kis-cli` workspace, Go 회귀 테스트 및 Rust 테스트 통과
+- 2026-03-06: 실측 NAS AAPL 시세 payload는 `name/open/high/low` 없이 `rsym/base/last/diff/rate/tvol/tamt/ordy`만 포함될 수 있어, 해외 시세 파서는 `rsym`과 `-` 기본값으로 보정한다
+- 2026-03-06: 실측 국내 현재가 payload는 `hts_kor_isnm` 없이 반환될 수 있어, 국내 현재가 파서는 종목코드 fallback을 사용한다
+- 2026-03-06: 실측 일별체결 payload는 `output1`/`output2` 구조를 사용하므로, Rust 구현은 `output1` 목록만 파싱하고 `output2` 요약은 무시한다
+- 2026-03-06: 모의투자 `inquire-psbl-sell`은 실측 기준 `rt_cd=1`, `msg_cd=OPSQ0002`를 반환해 성공 payload 대신 KIS 오류를 surface 한다
+- 2026-03-06: `kis-rs`는 전역 `--json` 플래그로 성공 응답을 구조화된 JSON으로 출력하며, 에러 출력은 기존 텍스트 경로를 유지한다
+- 2026-03-06: 협업 문서의 에이전트/스킬 설명은 Rust 우선 기준으로 정리하고, Go 관련 skill은 legacy reference 용도로만 남긴다
+- 2026-03-06: Rust 국내 읽기 API parity 단계에서는 `quote/chart/market/finance/info`만 추가하고, 실 API 검증은 읽기 전용 endpoint에 한정한다
+- 2026-03-06: Rust 국내 읽기 API parity를 완료했다. `kis-rs`는 `quote/chart/market/finance/info`를 포함해 Go CLI의 국내 읽기 명령 표면을 모두 지원한다
+- 2026-03-06: 실측 재무 API payload는 Go reference보다 최신 shape를 사용할 수 있다. `balance-sheet`/`income-statement`/`financial-ratio`는 `stac_yymm` 기반이며, 재무비율은 `roe_val`, `bsop_prfi_inrt`, `ntin_inrt`, `grs` 키를 alias로 파싱한다
+- 2026-03-06: 다음 마일스톤은 해외 API 확장으로 전환한다. 권장 순서는 `선행 기반 -> 해외 주문 1차 -> 해외 잔고/체결 1차 -> 해외 주문 2차 -> 시간외 REST -> WebSocket`이다.
+- 2026-03-06: 해외 API에서는 주문용 거래소 코드와 시세용 거래소 코드를 분리하고, 주문 TR ID는 거래소/실전/모의 환경에 따라 resolver로 결정한다.
+- 2026-03-06: `kis-core`/`kis-api`는 `tr_cont`를 읽을 수 있는 공통 응답 타입을 추가했다. 기존 body-only 호출 경로는 유지하고, pagination이 필요한 해외 잔고/체결 구현은 새 응답 타입을 사용한다.
+- 2026-03-06: `kis-rs order`는 `--exchange` 플래그가 있으면 해외 주문으로 라우팅한다. 해외 주문은 주문용 거래소 코드만 받으며, `--market`은 지원하지 않고 `--price`를 명시적으로 요구한다.
+- 2026-03-06: 해외 주문 1차(`order`, `order-rvsecncl`)를 Rust domain/CLI에 추가했고, `cargo test --manifest-path rust/Cargo.toml` 기준으로 전체 workspace 검증을 통과했다.
+- 2026-03-06: 해외 잔고/체결 1차는 `rust/kis-api/src/overseas/balance.rs`로 묶었다. `inquire_balance`, `inquire_present_balance`, `inquire_paymt_stdr_balance`, `inquire_ccnl`, `inquire_nccs`를 추가했고, 필요한 필드만 partial struct로 파싱한다.
+- 2026-03-06: pagination이 필요한 해외 잔고/체결 API는 응답 `tr_cont`뿐 아니라 다음 요청 헤더 `tr_cont: N`도 전송하도록 `get_json_response_with_tr_cont` 경로를 추가했다.
+- 2026-03-06: `kis-rs balance`는 해외 전용 서브커맨드 `overseas`, `present`, `settlement`, `ovrs-executions`, `open-orders`를 지원한다. 텍스트 출력은 output1 표와 output2/output3 요약으로 최소 구성한다.
+- 2026-03-06: 해외 잔고/체결 1차와 CLI 확장을 완료했고, `cargo test --manifest-path rust/Cargo.toml` 기준으로 전체 workspace 검증을 통과했다.
+- 2026-03-06: 해외 주문 2차로 `order-resv`, `daytime-order`, `daytime-order-rvsecncl`를 추가했다. 예약주문 응답은 일반 주문과 다른 shape(`ODNO`, `RSVN_ORD_RCIT_DT`, `OVRS_RSVN_ODNO`)를 별도 타입으로 파싱한다.
+- 2026-03-06: `kis-rs order`는 해외 주문에 한해 `--reserve`와 `--daytime` 모드를 지원한다. 두 플래그는 동시에 금지하고, `--daytime`은 미국 거래소(`NASD`, `NYSE`, `AMEX`) + 실전 환경에서만 허용한다.
+- 2026-03-06: 해외 주문 2차까지 포함해 `cargo test --manifest-path rust/Cargo.toml` 기준으로 전체 workspace 검증을 통과했다.
+- 2026-03-06: 남은 API audit 결과, 다음 우선순위는 국내 시간외 REST 1차와 해외 `inquire_psamount`다. `overtime_ccnl_krx`는 REST가 아니라 WebSocket 구독 항목으로 재분류했다.
+- 2026-03-07: 코드 리뷰 확정 이슈(`rate_limit`, token cache failure handling, explicit config path validation, overseas balance pagination, Korean display width/render smoke`)를 기능 확장보다 먼저 정리한다.
+- 2026-03-07: 리뷰 반영 안정화를 완료했다. `kis-core`는 concurrent-safe rate limiting, best-effort token cache, explicit config path fail-fast를 적용했고, `kis-api`는 pagination-aware wrapper dispatch와 해외 현재/결제잔고 `CTX_AREA_*` 연속조회를 보정했으며, `kis-cli`는 `dirs::home_dir()` fallback, `unicode-width` 기반 렌더링, 실제 바이너리 smoke test를 추가했다.
+- 2026-03-07: Go 제거 audit 결과, Rust CLI/API는 현재 Go 사용자 표면을 대체했지만 저장소 운영 문서와 설치 경로가 아직 Go reference 유지 전제를 갖고 있어 `cmd/`/`internal/` 삭제는 별도 정리 마일스톤으로 분리한다.
+- 2026-03-07: Rust CLI 계약 1차로 `--config`와 `--env`를 실제 global 플래그로 고정했다. 이제 `kis-rs config --config ...`와 `kis-rs price 005930 --env real` 형태를 파서/바이너리 smoke test로 보장한다.
+- 2026-03-07: Rust CLI 공식 진입점을 `kis`로 승격했다. `rust/kis-cli` 바이너리 이름, clap 앱 이름, smoke test 런타임 참조를 `kis` 기준으로 전환했고 `rust/target/debug/kis` 산출물과 `cargo test --manifest-path rust/Cargo.toml -p kis-cli` 통과를 확인했다.
+- 2026-03-07: Go reference 제거 마일스톤으로 `cmd/`, `internal/`, 루트 `go.mod`/`go.sum`을 삭제하고 협업 문서를 Rust-only 기준으로 정리한다.
+- 2026-03-07: agent-friendly CLI 계약 1차는 별도 `agent` 서브커맨드 없이 기존 `kis` 표면을 유지한 채 `--output text|json`, 공통 JSON success/error envelope, `--quiet`, 주문 `--dry-run`을 추가하는 범위로 진행한다.
+- 2026-03-07: agent-friendly CLI 계약 1차 구현을 완료했다. JSON 모드는 성공/실패 모두 `{ok, command, data|error}` envelope를 stdout으로 출력하고, 주문 계열은 `--dry-run`으로 endpoint/TR ID/request payload를 검증할 수 있으며 관련 parser/runtime/smoke test를 `cargo test --manifest-path rust/Cargo.toml -p kis-cli`로 고정했다.
+- 2026-03-07: 설치된 `rust-cli` skill 문서는 base guidance를 유지하되, `kis`에서 검증된 output-mode resolution, machine-readable error contract, secret redaction, side-effecting command `--dry-run` 패턴을 선택적 일반 규칙으로 반영한다. `rust-cli-kis-style`과 reference 문서는 현재 `--output`/JSON error envelope 계약에 맞춰 동기화한다.

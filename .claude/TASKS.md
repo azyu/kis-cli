@@ -1,0 +1,76 @@
+# Tasks
+
+## Completed
+
+- [x] KIS Open API 레퍼런스 문서 작성 (`docs/reference.md`)
+- [x] AGENTS.md 작성 및 CLAUDE.md 심볼릭 링크 설정
+- [x] 에이전트 워크플로우 체계 구축 (TASKS.md, STEERING.md)
+- [x] Skills 설치 및 에이전트 역할 분담 체계 반영
+- [x] Go 프로젝트 초기화 (go mod init, 디렉토리 구조, Cobra CLI, Viper config) — Agent: CLI
+- [x] 국내주식 시세 조회 API 구현 — Agent: Domain
+- [x] 해외주식 시세 조회 API 구현 — Agent: Domain
+- [x] CLI 시세 조회 명령어 — Agent: Domain (CLI 연동)
+- [x] 인증 모듈 구현 (토큰 발급/캐싱) — Agent: Core
+- [x] HTTP 클라이언트 공통 모듈 — Agent: Core
+- [x] 국내주식 주문 API 구현 (매수/매도) — Agent: Domain
+- [x] 단위 테스트 작성 (config, auth, client, domestic, overseas) — Agent: Quality
+- [x] 국내주식 호가/체결/투자자/회원사 시세 API (quote.go)
+- [x] 국내주식 잔고/매수가능/매도가능/일별체결 API (balance.go)
+- [x] 국내주식 일별/분별/지수 차트 API (chart.go)
+- [x] 국내주식 주문 정정/취소 API (order.go 확장)
+- [x] 국내주식 거래량순위/휴장일 시장현황 API (market.go)
+- [x] 국내주식 재무상태표/손익계산서/재무비율 API (finance.go)
+- [x] 국내주식 배당/뉴스/투자의견/종목검색 API (info.go)
+- [x] CLI 명령어 배선 (quote, chart, market, finance, info, balance 서브커맨드)
+- [x] Rust workspace 초기화 및 병행 마이그레이션 체계 수립 — Agent: Core
+- [x] Rust Core 구현 (config/auth/client) — Agent: Core
+- [x] Rust Domain 구현 (국내 price/order/balance, 해외 price) — Agent: Domain
+- [x] Rust CLI 구현 (clap 기반 `kis-rs`) — Agent: CLI
+- [x] Rust 테스트/검증 체계 구축 — Agent: Quality
+- [x] README Rust 설정 가이드 보강 — Agent: CLI
+- [x] 해외주식 현재가 live payload 파싱 수정 — Agent: Domain
+- [x] 국내주식 현재가/잔고 live payload 파싱 수정 — Agent: Domain
+- [x] Rust CLI 전역 JSON 출력 지원 (`--json`) — Agent: CLI
+- [x] AGENTS.md 에이전트/스킬 설명 Rust 기준 정리 — Agent: CLI
+- [x] Rust 국내 읽기 API parity 확장 (`quote`, `chart`, `market`, `finance`, `info`) — Agent: Main
+- [x] Rust 국내 quote/market 도메인 구현 — Agent: Main
+- [x] Rust 국내 chart/finance 도메인 구현 — Agent: Main
+- [x] Rust 국내 info 도메인 구현 — Agent: Domain C
+- [x] Rust CLI 서브커맨드 확장 (`quote`, `chart`, `market`, `finance`, `info`) — Agent: CLI
+- [x] Rust 회귀 테스트 및 읽기 API smoke test 확장 — Agent: Main
+- [x] Rust 해외 API 확장 마일스톤 재정의 및 작업 분배 — Agent: Main
+- [x] 해외주식 REST 선행 기반 정리 (`tr_cont` 대응, 해외 주문 거래소/TR ID resolver) — Agent: Core
+- [x] 해외주식 주문 1차 (`order`, `order-rvsecncl`) — Agent: Domain
+- [x] 해외주식 잔고 1차 (`inquire_balance`, `inquire_present_balance`, `inquire_paymt_stdr_balance`) — Agent: Domain
+- [x] 해외주식 체결/미체결 1차 (`inquire_ccnl`, `inquire_nccs`) — Agent: Domain
+- [x] 해외 주문/잔고 CLI 표면 확장 — Agent: CLI
+- [x] 해외주식 주문 2차 (`order-resv`, `daytime-order`, `daytime-order-rvsecncl`) — Agent: Main
+- [x] 남은 Rust API 커버리지 audit 및 우선순위 재정리 — Agent: Main
+- [x] 리뷰 반영 안정화 (`rate_limit`, 토큰 캐시 내구성, 명시적 config path 검증, 해외 pagination, CLI 정렬/실행 경로 테스트) — Agent: Main
+- [x] Go 구현 제거 가능성 audit (Rust 기능 대체 범위, 잔여 의존점, 삭제 리스크 검토) — Agent: Main
+- [x] Rust CLI 계약 정리 1차 (`--config`/`--env` global 처리 및 parse contract 고정) — Agent: Main
+- [x] Rust 공식 진입점 승격 (`kis-rs` -> `kis`) — Agent: Main
+- [x] 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 변경 (fallback 없음) — Agent: Main
+
+## In Progress
+- [x] Git 히스토리 단일 init 커밋 재작성 및 `origin` 초기 push — Agent: Main
+- [x] README를 Rust 전용 문서로 정리 — Agent: Main
+- [x] Go reference 구현 제거 및 운영 문서 Rust-only 정리 — Agent: Main
+- [x] Rust agent-friendly CLI 계약 1차 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run`) — Agent: Main
+- [x] Rust CLI skill 문서 갱신 (`rust-cli`, `rust-cli-kis-style`, reference 출력 계약 정리) — Agent: Main
+- [x] 저장소 라이선스를 MIT로 정리 (`LICENSE` 추가) — Agent: Main
+
+## Backlog
+- [ ] 해외주식 주문 API 구현 — Agent: Domain
+- [ ] 해외주식 잔고/체결 API 구현 — Agent: Domain
+- [ ] 시간외 거래 API 구현 — Agent: Domain
+- [ ] WebSocket 실시간 시세 — Agent: Core
+- [ ] E2E 통합 테스트 (모의투자) — Agent: Quality
+- [ ] ratatui 기반 TUI (`kis tui`) 검토 및 도입 — Agent: CLI
+- [ ] 해외주식 매수가능금액 조회 (`inquire_psamount`) — Agent: Domain
+- [ ] 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`) — Agent: Domain
+- [ ] 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`) — Agent: Domain
+- [ ] 해외주식 시세/시장정보 2차 (`dailyprice`, `inquire-asking-price`, chart/search/ranking 계열) — Agent: Domain
+- [ ] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Core
+- [ ] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Core
+- [ ] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Quality
