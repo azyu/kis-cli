@@ -53,6 +53,7 @@
 - [x] 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 변경 (fallback 없음) — Agent: Main
 
 ## In Progress
+- [x] 작업 컨텍스트 문서 경로를 `.claude/`에서 `.context/`로 이전 — Agent: Main
 - [x] AGENTS.md에 DoD와 Git/PR 완료 절차 명시 — Agent: Main
 - [x] Git 히스토리 단일 init 커밋 재작성 및 `origin` 초기 push — Agent: Main
 - [x] README를 Rust 전용 문서로 정리 — Agent: Main

@@ -67,7 +67,7 @@ rust/
 - Core 변경: 설정, 인증, HTTP/WebSocket, 공통 에러, workspace manifest
 - Domain 변경: 국내/해외 REST 도메인, TR ID 매핑, 거래소 코드 변환, pagination
 - CLI 변경: 명령어 표면, 실행 라우팅, stdout/stderr/JSON 계약
-- 구조를 바꾸면 `AGENTS.md`, `.claude/STEERING.md`, `README.md`와 함께 이 문서를 갱신한다
+- 구조를 바꾸면 `AGENTS.md`, `.context/STEERING.md`, `README.md`와 함께 이 문서를 갱신한다
 
 ## Verification
 
