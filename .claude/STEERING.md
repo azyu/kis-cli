@@ -28,6 +28,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 한 에이전트가 여러 역할을 겸할 수 있으나, 작업 시작 시 TASKS.md에 진행 상태를 기록한다
 - 동일 파일을 두 에이전트가 동시에 수정하지 않는다
 - 의존성이 있는 작업은 순서를 지킨다: Core -> Domain -> CLI -> Quality
+- 작업 완료 기준과 후속 Git/PR 절차는 `AGENTS.md`의 DoD 규칙을 따른다
 - Rust CLI는 `kis`를 공식 바이너리 이름으로 사용한다
 - Rust-only 저장소 기준을 유지하고, 삭제된 Go 경로를 다시 참조하지 않는다
 - 주문용 거래소 코드(`NASD`, `NYSE` 등)와 시세용 거래소 코드(`NAS`, `NYS` 등)를 동일 타입으로 섞지 않는다
@@ -46,6 +47,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
+- 2026-03-08: 저장소 작업 완료 기준은 `AGENTS.md`의 DoD를 따른다. 작업은 `main`에서 분기한 브랜치에서 시작하고, 논리적 단계별 커밋 후 원격 push와 PR 작성까지를 기본 후속 절차로 명시한다.
 - 2026-03-07: `release-build.yml`은 5개 자산(`linux amd64`, `linux arm64`, `macOS arm64`, `Windows x64`, `Windows arm64`)을 matrix로 빌드한다. Linux/macOS는 `tar.gz`, Windows는 `zip`으로 패키징하고, release job은 두 형식 모두에 대한 `checksums.txt`를 생성한다.
 - 2026-03-07: GitHub Actions는 `bb-cli`와 같은 최소 패턴을 유지하되, `release-build.yml`은 수동 `release_tag` 입력으로 platform matrix 자산과 `checksums.txt`를 GitHub Release에 업로드한다. Homebrew tap/formula 자동화는 이 마일스톤에 포함하지 않는다.
 - 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.

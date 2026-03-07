@@ -31,6 +31,21 @@
 - 작업이 정상적으로 완료되면 반드시 커밋한다
 - 커밋 메시지는 Conventional Commits 형식을 따른다 (`feat:`, `fix:`, `docs:`, `refactor:`, `test:` 등)
 
+### Definition of Done (DoD)
+
+- 사용자 요청 범위를 충족하는 최소 변경만 반영한다
+- 이번 변경으로 영향받는 문서/명세/협업 문서(`AGENTS.md`, `.claude/TASKS.md`, `.claude/STEERING.md`, `docs/SPEC.md`)를 필요한 범위에서 함께 갱신한다
+- 적용한 검증을 실행해 결과를 확인한다. 검증을 실행하지 못했다면 이유와 미실행 범위를 작업 보고에 명시한다
+- 남은 제약, 후속 작업, 운영 결정이 생기면 `.claude/TASKS.md` 또는 `.claude/STEERING.md`에 기록한다
+- 결과, 검증, 남은 리스크를 사용자에게 보고할 수 있는 상태가 되면 완료로 간주한다
+
+### Git/PR 절차
+
+- 모든 작업은 `main`에서 분기한 작업 브랜치에서 시작한다
+- 커밋은 논리적 단계별로 나누고 Conventional Commits 형식을 유지한다
+- DoD를 충족하면 현재 작업 브랜치를 원격에 push한다
+- push 후 변경 요약, 검증 결과, 남은 리스크를 포함한 PR을 작성한다
+
 ---
 
 ## Agent Roles
