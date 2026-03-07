@@ -1,0 +1,103 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (vMAJOR.MINOR.PATCH), e.g. v0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build linux-amd64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Validate release tag format
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.release_tag }}"
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${TAG}"
+            echo "Expected format: vMAJOR.MINOR.PATCH (example: v0.1.0)"
+            exit 1
+          fi
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Build binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release
+
+      - name: Package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          ARCHIVE_NAME="kis_${VERSION}_linux_amd64"
+
+          mkdir staging
+          cp rust/target/release/kis staging/
+          cp README.md staging/
+          cp LICENSE staging/
+          tar -czf "${ARCHIVE_NAME}.tar.gz" -C staging kis README.md LICENSE
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kis_linux_amd64
+          path: kis_*.tar.gz
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.tar.gz | sort -k2 > checksums.txt
+
+      - name: Create or update release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.release_tag }}"
+
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "${TAG}" dist/* --title "${TAG}" --generate-notes --repo "${GITHUB_REPOSITORY}"
+          fi

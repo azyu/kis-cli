@@ -62,6 +62,7 @@
 - [x] Rust workspace 2-crate 통합 (`kis-api` -> `kis-core`, `docs/SPEC.md`) — Agent: Main
 - [x] 남은 기능 구현 상태 검토 및 backlog 재분류 — Agent: Main
 - [x] 해외 예약취소 region 계약 정리 (`reserve-cancel`은 `us`만 허용) — Agent: Main
+- [x] GitHub Actions 추가 (`ci`, `release-build`) — Agent: Main
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain
