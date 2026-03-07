@@ -227,6 +227,8 @@ kis-cli/
 │   └── kis-cli/          # clap 기반 CLI 엔트리포인트
 ```
 
+크레이트 경계와 모듈 책임은 `docs/SPEC.md`를 기준으로 유지합니다.
+
 ## 보안
 
 - 토큰 캐시 파일 권한은 `0600`으로 관리합니다.
@@ -237,6 +239,7 @@ kis-cli/
 
 ```bash
 cargo test --manifest-path rust/Cargo.toml
+cargo test --manifest-path rust/Cargo.toml -p kis-core
 cargo test --manifest-path rust/Cargo.toml -p kis-cli
 ```
 

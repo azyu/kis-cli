@@ -54,9 +54,27 @@ rust/
 
 `kis-cli`는 도메인 접근 시 `kis_core::domestic::*`, `kis_core::overseas::*`를 사용한다.
 
+## CLI Contract
+
+- 공식 바이너리 이름은 `kis`다.
+- 전역 플래그는 `--config`, `--env`, `--output`, `--json`, `--quiet`를 유지한다.
+- 기본 설정 파일 경로는 `~/.config/kis/config.yaml`이다.
+- JSON 모드는 성공/실패 모두 `{ok, command, data|error}` envelope를 stdout으로 출력한다.
+- 주문 계열은 `--dry-run`으로 endpoint, TR ID, request payload를 검증할 수 있어야 한다.
+
 ## Ownership Guidance
 
 - Core 변경: 설정, 인증, HTTP/WebSocket, 공통 에러, workspace manifest
 - Domain 변경: 국내/해외 REST 도메인, TR ID 매핑, 거래소 코드 변환, pagination
 - CLI 변경: 명령어 표면, 실행 라우팅, stdout/stderr/JSON 계약
 - 구조를 바꾸면 `AGENTS.md`, `.claude/STEERING.md`, `README.md`와 함께 이 문서를 갱신한다
+
+## Verification
+
+구조 변경 후 최소 검증 기준은 아래와 같다.
+
+```bash
+cargo test --manifest-path rust/Cargo.toml
+cargo test --manifest-path rust/Cargo.toml -p kis-core
+cargo test --manifest-path rust/Cargo.toml -p kis-cli
+```
