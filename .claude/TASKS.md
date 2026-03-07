@@ -64,6 +64,7 @@
 - [x] 해외 예약취소 region 계약 정리 (`reserve-cancel`은 `us`만 허용) — Agent: Main
 - [x] GitHub Actions 추가 (`ci`, `release-build`) — Agent: Main
 - [x] GitHub release target 확대 (`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`) — Agent: Main
+- [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain

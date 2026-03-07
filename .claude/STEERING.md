@@ -46,7 +46,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
-- 2026-03-07: `release-build.yml`은 4개 자산(`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`)을 matrix로 빌드한다. Unix 계열은 `tar.gz`, Windows 계열은 `zip`으로 패키징하고, release job은 두 형식 모두에 대한 `checksums.txt`를 생성한다.
+- 2026-03-07: `release-build.yml`은 5개 자산(`linux amd64`, `linux arm64`, `macOS arm64`, `Windows x64`, `Windows arm64`)을 matrix로 빌드한다. Linux/macOS는 `tar.gz`, Windows는 `zip`으로 패키징하고, release job은 두 형식 모두에 대한 `checksums.txt`를 생성한다.
 - 2026-03-07: GitHub Actions는 `bb-cli`와 같은 최소 패턴을 유지하되, `release-build.yml`은 수동 `release_tag` 입력으로 platform matrix 자산과 `checksums.txt`를 GitHub Release에 업로드한다. Homebrew tap/formula 자동화는 이 마일스톤에 포함하지 않는다.
 - 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.
 - 2026-03-07: `kis order reserve-cancel`은 검증된 TR ID가 있는 미국 예약취소만 지원한다. `balance reserve-orders`는 기존대로 `us|asia` 조회를 유지하고, Asia 예약취소는 TR ID가 확인되기 전까지 CLI에서 노출하지 않는다.
