@@ -2,7 +2,10 @@ use std::fs;
 use std::process::Command as ProcessCommand;
 
 use clap::Parser;
-use kis_cli::cli::{BalanceArgs, BalanceCommand, Cli, Command, OrderCommand, ReservationRegion, WsCommand};
+use kis_cli::cli::{
+    BalanceArgs, BalanceCommand, Cli, Command, OrderCommand, ReservationCancelRegion,
+    ReservationRegion, WsCommand,
+};
 use kis_cli::render::{render_pairs, render_table};
 use tempfile::tempdir;
 
@@ -208,8 +211,54 @@ fn parses_reserve_cancel_order_command() {
         panic!("expected reserve-cancel command");
     };
 
-    assert_eq!(args.region, ReservationRegion::Us);
+    assert_eq!(args.region, ReservationCancelRegion::Us);
     assert_eq!(args.receipt_date, "20260307");
+}
+
+#[test]
+fn rejects_asia_region_for_reserve_cancel_order_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "order",
+        "reserve-cancel",
+        "--region",
+        "asia",
+        "--receipt-date",
+        "20260307",
+        "--reservation-order-no",
+        "0030008244",
+    ]);
+
+    assert!(cli.is_err());
+}
+
+#[test]
+fn parses_asia_region_for_reserve_orders_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "balance",
+        "reserve-orders",
+        "--region",
+        "asia",
+        "--start",
+        "20260301",
+        "--end",
+        "20260307",
+        "--exchange",
+        "TKSE",
+    ])
+    .unwrap();
+
+    let Command::Balance(BalanceArgs { command }) = cli.command else {
+        panic!("expected balance command");
+    };
+
+    let Some(BalanceCommand::ReserveOrders(args)) = command else {
+        panic!("expected reserve-orders command");
+    };
+
+    assert_eq!(args.region, ReservationRegion::Asia);
+    assert_eq!(args.exchange, "TKSE");
 }
 
 #[test]

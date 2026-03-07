@@ -47,6 +47,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 ## Decisions Log
 
 - 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.
+- 2026-03-07: `kis order reserve-cancel`은 검증된 TR ID가 있는 미국 예약취소만 지원한다. `balance reserve-orders`는 기존대로 `us|asia` 조회를 유지하고, Asia 예약취소는 TR ID가 확인되기 전까지 CLI에서 노출하지 않는다.
 - 2026-03-07: 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 전환하고, 기존 `~/.kis/config.yaml` fallback은 두지 않는다. 이번 변경 범위는 설정 파일 경로에 한정하고 토큰 캐시는 유지한다.
 - 2026-03-07: README는 공개 사용자 문서 기준으로 Rust CLI(`kis`)만 설명하고, Go reference 관련 내용은 제거한다.
 - 2026-03-07: GitHub 공개 준비를 위해 기존 히스토리를 단일 루트 커밋으로 재작성한 뒤 `origin`에 초기 push 하기로 결정했다.
