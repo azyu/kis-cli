@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use kis_core::client::{JsonResponse, KisClient};
+use crate::client::{JsonResponse, KisClient};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -196,7 +196,7 @@ mod tests {
 
     use anyhow::Result;
     use async_trait::async_trait;
-    use kis_core::client::JsonResponse;
+    use crate::client::JsonResponse;
     use serde_json::{Value, json};
 
     use super::{ApiClient, ensure_success, parse_output, parse_outputs};

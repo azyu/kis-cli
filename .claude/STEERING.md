@@ -2,9 +2,9 @@
 
 ## Current Direction
 
-저장소는 Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 config/auth/client, 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력을 지원한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
+저장소는 `kis-core` + `kis-cli` 2-crate Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 `kis-core`가 config/auth/client/ws와 국내/해외 도메인 API를 함께 소유한다. 지원 표면은 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력까지 포함한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
 
-Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다.
+Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다. 현재 crate/module 경계의 기술 기준 문서는 `docs/SPEC.md`다.
 
 ## Priorities
 
@@ -18,8 +18,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 | Agent | 담당 영역 | 현재 상태 |
 |-------|----------|----------|
-| Core | `rust/kis-core/`, `rust/Cargo.toml`, `rust/kis-api/src/client.rs` | Rust-only 기준 유지 |
-| Domain | `rust/kis-api/src/overseas/`, `rust/kis-api/src/domestic/` | 다음 API 확장 대기 |
+| Core | `rust/kis-core/src/{auth,client,config,error,ws}.rs`, `rust/Cargo.toml` | Rust-only 기준 유지 |
+| Domain | `rust/kis-core/src/api_client.rs`, `rust/kis-core/src/{domestic,overseas}/` | 다음 API 확장 대기 |
 | CLI | `rust/kis-cli/` | `kis` 표면 유지 및 문서 정리 |
 | Quality | `rust/*/tests`, Rust 테스트 모듈, CI | Go 제거 후 회귀 검증 |
 
@@ -34,7 +34,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - pagination이 필요한 해외 잔고/체결 API는 `tr_cont`/`CTX_AREA_*` 처리를 공통화한 뒤 붙인다
 - WebSocket은 REST 마일스톤과 분리하고, `/oauth2/Approval` 발급을 Core 선행 작업으로 둔다
 - 리뷰에서 확정된 결함은 새 기능보다 우선해서 재현 테스트를 추가한 뒤 수정한다
-- 2026-03-07 현재 배치는 `rust/kis-api/src/domestic/*` 시간외 REST, `rust/kis-api/src/overseas/balance.rs` 계좌 조회 2차/매수가능금액, `rust/kis-core/src/*` WebSocket approval/client, `rust/kis-cli/src/*` CLI/runtime/test 확장 순서로 진행한다
+- 2026-03-07 현재 배치는 `rust/kis-core/src/{domestic,overseas}/*` 도메인 API, `rust/kis-core/src/{auth,client,config,error,ws}.rs` 공통 인프라, `rust/kis-cli/src/*` CLI/runtime/test 확장 순서로 진행한다
 
 ## Blockers
 
@@ -46,6 +46,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
+- 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.
 - 2026-03-07: 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 전환하고, 기존 `~/.kis/config.yaml` fallback은 두지 않는다. 이번 변경 범위는 설정 파일 경로에 한정하고 토큰 캐시는 유지한다.
 - 2026-03-07: README는 공개 사용자 문서 기준으로 Rust CLI(`kis`)만 설명하고, Go reference 관련 내용은 제거한다.
 - 2026-03-07: GitHub 공개 준비를 위해 기존 히스토리를 단일 루트 커밋으로 재작성한 뒤 `origin`에 초기 push 하기로 결정했다.

@@ -2,10 +2,11 @@
 
 ## Agent Workflow
 
-**작업 시작 전 반드시 다음 두 파일을 읽는다:**
+**작업 시작 전 반드시 다음 세 파일을 읽는다:**
 
 1. `.claude/TASKS.md` - 현재 진행 중인 작업 목록과 상태
 2. `.claude/STEERING.md` - 작업 방향, 우선순위, 에이전트 간 조율 지침
+3. `docs/SPEC.md` - 현재 Rust 2-crate 아키텍처와 모듈 경계 기술 명세
 
 ### TASKS.md 규칙
 
@@ -18,6 +19,12 @@
 - 현재 프로젝트 방향, 우선순위, 주의사항을 기록한다
 - 에이전트 간 충돌 방지를 위한 작업 영역 분담 정보를 포함한다
 - 작업 중 발견한 중요한 결정사항이나 블로커를 기록한다
+
+### SPEC.md 규칙
+
+- Rust 기술 구조의 single source of truth로 취급한다
+- crate 경계, 모듈 배치, 의존 방향을 바꾸면 함께 갱신한다
+- 구현 세부보다 현재 유지해야 하는 구조 제약을 우선 기록한다
 
 ### 커밋 규칙
 
@@ -32,13 +39,13 @@
 
 ### Agent 1: Core (설정 + 인증 + HTTP 클라이언트)
 
-- **담당:** `rust/kis-core/`, `rust/Cargo.toml`
+- **담당:** `rust/kis-core/src/auth.rs`, `rust/kis-core/src/client.rs`, `rust/kis-core/src/config.rs`, `rust/kis-core/src/error.rs`, `rust/kis-core/src/ws.rs`, `rust/Cargo.toml`
 - **역할:** YAML 설정 로딩, 환경 매핑, OAuth 토큰 발급/캐싱, hashkey, 공통 HTTP 클라이언트, Rate Limiting
 - **Skills:** `api-design`, `api-security-hardening`
 
 ### Agent 2: Domain (주식 도메인 로직)
 
-- **담당:** `rust/kis-api/`
+- **담당:** `rust/kis-core/src/api_client.rs`, `rust/kis-core/src/domestic/`, `rust/kis-core/src/overseas/`
 - **역할:** 국내/해외 시세 조회, 주문, 잔고 등 API 구현, TR ID 매핑, 거래소 코드 변환
 - **Skills:** `api-design`
 
@@ -86,6 +93,7 @@
 kis-cli/
 ├── AGENTS.md              # 이 파일
 ├── docs/
+│   ├── SPEC.md            # Rust 2-crate 기술 명세
 │   └── reference.md       # KIS API 레퍼런스 (엔드포인트, TR ID, 거래소 코드 등)
 └── rust/                  # Rust workspace
 ```
@@ -93,10 +101,14 @@ kis-cli/
 ## Local Test Binary
 
 - Final local test install path: `~/.local/bin/kis`
-- Release build artifact source: `rust/target/release/kis-rs`
+- Release build artifact source: `rust/target/release/kis`
 
 ## Key References
 
+- `docs/SPEC.md` - 현재 Rust 2-crate 아키텍처 명세.
+  - `kis-core` / `kis-cli` 책임 분리
+  - 공개 모듈 경로와 의존 방향
+  - 새 기능 추가 시 배치 기준
 - `docs/reference.md` - API 레퍼런스 문서. 작업 전 반드시 참조할 것.
   - 섹션 1-3: 도메인, 인증 흐름, 공통 헤더/응답 구조
   - 섹션 4: 카테고리별 엔드포인트 (국내주식 156, 해외주식 50, 채권 18, 선물옵션 78, ETF/ETN 6, ELW 24)

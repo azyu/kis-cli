@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::client::{ApiClient, parse_output, to_json_value};
+use crate::api_client::{ApiClient, parse_output, to_json_value};
 
 use super::exchange::OrderExchange;
 

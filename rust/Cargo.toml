@@ -1,4 +1,3 @@
 [workspace]
-members = ["kis-core", "kis-api", "kis-cli"]
+members = ["kis-core", "kis-cli"]
 resolver = "2"
-

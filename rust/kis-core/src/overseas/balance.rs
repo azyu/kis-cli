@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
-use kis_core::client::JsonResponse;
+use crate::client::JsonResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::client::{ApiClient, ensure_success, parse_output, to_json_value};
+use crate::api_client::{ApiClient, ensure_success, parse_output, to_json_value};
 
 const MAX_PAGES: usize = 10;
 
@@ -1617,7 +1617,7 @@ mod tests {
 
     use anyhow::Result;
     use async_trait::async_trait;
-    use kis_core::client::JsonResponse;
+    use crate::client::JsonResponse;
     use serde_json::json;
 
     use super::*;

@@ -59,6 +59,7 @@
 - [x] Rust agent-friendly CLI 계약 1차 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run`) — Agent: Main
 - [x] Rust CLI skill 문서 갱신 (`rust-cli`, `rust-cli-kis-style`, reference 출력 계약 정리) — Agent: Main
 - [x] 저장소 라이선스를 MIT로 정리 (`LICENSE` 추가) — Agent: Main
+- [x] Rust workspace 2-crate 통합 (`kis-api` -> `kis-core`, `docs/SPEC.md`) — Agent: Main
 
 ## Backlog
 - [ ] 해외주식 주문 API 구현 — Agent: Domain

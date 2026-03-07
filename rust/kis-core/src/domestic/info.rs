@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, parse_output};
 
 const PATH_DIVIDEND: &str = "/uapi/domestic-stock/v1/ksdinfo/dividend";
 const TR_ID_DIVIDEND: &str = "HHKDB669107C0";

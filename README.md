@@ -219,12 +219,12 @@ kis config --quiet
 
 ```text
 kis-cli/
+├── docs/
+│   ├── SPEC.md           # Rust 2-crate 기술 명세
+│   └── reference.md      # KIS API 레퍼런스
 ├── rust/
-│   ├── kis-core/         # 설정, 인증, 공통 HTTP 클라이언트
-│   ├── kis-api/          # 국내/해외 도메인 API
+│   ├── kis-core/         # 설정, 인증, HTTP, WebSocket, 국내/해외 도메인 API
 │   └── kis-cli/          # clap 기반 CLI 엔트리포인트
-└── docs/
-    └── reference.md      # KIS API 레퍼런스
 ```
 
 ## 보안
@@ -240,8 +240,7 @@ cargo test --manifest-path rust/Cargo.toml
 cargo test --manifest-path rust/Cargo.toml -p kis-cli
 ```
 
-- `kis-core`: 설정, 인증, HTTP 클라이언트
-- `kis-api`: 국내/해외 도메인 API 파싱 및 요청 경로
+- `kis-core`: 설정, 인증, HTTP/WebSocket, 국내/해외 도메인 API 파싱 및 요청 경로
 - `kis-cli`: `clap` 파서, 렌더링, 실행 경로 smoke test
 
 ## 라이선스

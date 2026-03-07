@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, parse_output};
 
 const PATH_DAILY_ITEM_CHART: &str =
     "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, parse_output};
 
 const PATH_BALANCE_SHEET: &str = "/uapi/domestic-stock/v1/finance/balance-sheet";
 const TR_ID_BALANCE_SHEET: &str = "FHKST66430100";

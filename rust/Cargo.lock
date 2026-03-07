@@ -732,25 +732,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "kis-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "kis-core",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "kis-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
  "dirs",
- "kis-api",
  "kis-core",
  "serde",
  "serde_json",
@@ -763,6 +750,8 @@ dependencies = [
 name = "kis-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "chrono",
  "dirs",
  "futures-util",
