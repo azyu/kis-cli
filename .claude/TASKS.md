@@ -60,12 +60,13 @@
 - [x] Rust CLI skill 문서 갱신 (`rust-cli`, `rust-cli-kis-style`, reference 출력 계약 정리) — Agent: Main
 - [x] 저장소 라이선스를 MIT로 정리 (`LICENSE` 추가) — Agent: Main
 - [x] Rust workspace 2-crate 통합 (`kis-api` -> `kis-core`, `docs/SPEC.md`) — Agent: Main
+- [x] 남은 기능 구현 상태 검토 및 backlog 재분류 — Agent: Main
 
 ## Backlog
-- [ ] 해외주식 주문 API 구현 — Agent: Domain
-- [ ] 해외주식 잔고/체결 API 구현 — Agent: Domain
-- [~] 시간외 거래 API 구현 — Agent: Main
-- [ ] WebSocket 실시간 시세 — Agent: Core
+- [x] 해외주식 주문 API 구현 — Agent: Domain
+- [x] 해외주식 잔고/체결 API 구현 — Agent: Domain
+- [ ] 시간외 거래 API 2차 (`overtime_asking_price_krx`, `overtime_fluctuation`, `overtime_volume`) — Agent: Main
+- [ ] WebSocket 실시간 시세 표면 확대 (정규장 시세/체결, 다중 구독 UX) — Agent: Core
 - [ ] E2E 통합 테스트 (모의투자) — Agent: Quality
 - [ ] ratatui 기반 TUI (`kis tui`) 검토 및 도입 — Agent: CLI
 - [x] 해외주식 매수가능금액 조회 (`inquire_psamount`) — Agent: Main
