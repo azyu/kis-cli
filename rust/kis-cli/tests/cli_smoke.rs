@@ -82,6 +82,35 @@ fn parses_quote_overtime_ask_command() {
 }
 
 #[test]
+fn parses_overseas_daily_price_command() {
+    let cli =
+        Cli::try_parse_from(["kis", "price", "--exchange", "NAS", "AAPL", "--daily"]).unwrap();
+
+    let Command::Price(args) = cli.command else {
+        panic!("expected price command");
+    };
+
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    assert!(args.daily);
+}
+
+#[test]
+fn parses_overseas_quote_ask_command() {
+    let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
+
+    let Command::Quote(args) = cli.command else {
+        panic!("expected quote command");
+    };
+
+    let kis_cli::cli::QuoteCommand::Ask(args) = args.command else {
+        panic!("expected quote ask command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+}
+
+#[test]
 fn parses_overseas_balance_open_orders_command() {
     let cli = Cli::try_parse_from([
         "kis",

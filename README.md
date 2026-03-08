@@ -73,6 +73,7 @@ kis --config ~/.config/kis/config.yaml config
 kis price 005930
 kis price 005930 --daily
 kis price --exchange NAS AAPL
+kis price --exchange NAS AAPL --daily
 kis price --exchange NYS MSFT
 ```
 
@@ -80,9 +81,11 @@ kis price --exchange NYS MSFT
 
 ```bash
 kis quote ask 005930
+kis quote ask AAPL --exchange NAS
 kis quote overtime-price 005930
 kis quote overtime-ask 005930
 kis quote ccnl 005930
+kis quote ccnl AAPL --exchange NAS
 kis chart daily 005930 --start 20260101 --end 20260306
 kis chart time 005930 --unit 5
 kis chart index-price 0001
@@ -186,8 +189,8 @@ kis config --quiet
 
 ## 지원 표면
 
-- `price`: 국내 현재가/일별시세, 해외 현재가
-- `quote`: 호가, 시간외 현재가/호가, 체결, 투자자, 회원사
+- `price`: 국내 현재가/일별시세, 해외 현재가/기간시세
+- `quote`: 국내 호가/시간외 현재가/호가/체결/투자자/회원사, 해외 호가/체결
 - `chart`: 일별 차트, 분별 차트, 지수 차트, 지수 현재가
 - `order`: 국내 매수/매도/정정/취소, 해외 매수/매도/정정/취소, 해외 예약주문, 예약취소(미국만), 미국 주간주문/정정/취소
 - `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결, 매수가능금액, 기간손익/기간거래, 지정가체결, 예약주문 조회(us/asia)
@@ -211,7 +214,7 @@ kis config --quiet
 
 ## 거래소 코드 주의
 
-- 시세 조회(`price`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
+- 시세 조회(`price`, `quote ask`, `quote ccnl`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
 - 해외 주문/잔고는 주문용 거래소 코드(`NASD`, `NYSE`, `AMEX`, `SEHK`, `SHAA`, `SZAA`, `TKSE`, `HASE`, `VNSE`)를 사용합니다.
 - `--daytime`은 미국 거래소(`NASD`, `NYSE`, `AMEX`) + `real` 환경에서만 허용됩니다.
 

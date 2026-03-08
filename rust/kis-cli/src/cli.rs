@@ -137,13 +137,13 @@ pub struct QuoteArgs {
 #[derive(Debug, Subcommand)]
 pub enum QuoteCommand {
     #[command(about = "호가 조회 (매수/매도 호가잔량)")]
-    Ask(SymbolArgs),
+    Ask(ExchangeSymbolArgs),
     #[command(about = "시간외 현재가 조회")]
     OvertimePrice(SymbolArgs),
     #[command(about = "시간외 호가 조회")]
     OvertimeAsk(SymbolArgs),
     #[command(about = "체결 조회 (최근 거래 내역)")]
-    Ccnl(SymbolArgs),
+    Ccnl(ExchangeSymbolArgs),
     #[command(about = "투자자별 매매동향")]
     Investor(SymbolArgs),
     #[command(about = "회원사별 매매동향")]
@@ -728,6 +728,19 @@ pub struct SymbolArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ExchangeSymbolArgs {
+    #[arg(help = "종목코드 또는 티커")]
+    pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct SearchArgs {
     #[arg(help = "키워드")]
     pub keyword: String,
@@ -788,6 +801,29 @@ mod tests {
         assert_eq!(args.exchange.as_deref(), Some("NAS"));
         assert_eq!(args.symbol, "AAPL");
         assert!(!args.daily);
+    }
+
+    #[test]
+    fn parses_overseas_daily_price_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "price",
+            "--exchange",
+            "NAS",
+            "AAPL",
+            "--daily",
+            "--period",
+            "W",
+        ])
+        .unwrap();
+        let Command::Price(args) = cli.command else {
+            panic!("expected price command");
+        };
+
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+        assert_eq!(args.symbol, "AAPL");
+        assert!(args.daily);
+        assert_eq!(args.period, "W");
     }
 
     #[test]
@@ -1116,6 +1152,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_overseas_quote_ask_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::Ask(args) = args.command else {
+            panic!("expected quote ask command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
     fn parses_quote_overtime_price_command() {
         let cli = Cli::try_parse_from(["kis", "quote", "overtime-price", "005930"]).unwrap();
         let Command::Quote(args) = cli.command else {
@@ -1126,6 +1177,21 @@ mod tests {
         };
 
         assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_overseas_quote_ccnl_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "quote", "ccnl", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::Ccnl(args) = args.command else {
+            panic!("expected quote ccnl command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
     }
 
     #[test]

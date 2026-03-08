@@ -2,13 +2,13 @@
 
 ## Current Direction
 
-저장소는 `kis-core` + `kis-cli` 2-crate Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 `kis-core`가 config/auth/client/ws와 국내/해외 도메인 API를 함께 소유한다. 지원 표면은 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력까지 포함한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
+저장소는 `kis-core` + `kis-cli` 2-crate Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 `kis-core`가 config/auth/client/ws와 국내/해외 도메인 API를 함께 소유한다. 지원 표면은 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 현재가/기간시세/호가/체결/주문/잔고/예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력을 포함한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
 
 Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다. 현재 crate/module 경계의 기술 기준 문서는 `docs/SPEC.md`다.
 
 ## Priorities
 
-1. 해외주식 시세/시장정보 2차 (`dailyprice`, `inquire-asking-price`, chart/search/ranking 계열)
+1. 해외주식 시세/시장정보 2차 잔여분 (chart/search/ranking 계열)
 2. E2E 통합 테스트 (모의투자) 및 live smoke 기준 정리
 3. `ratatui` 필요성 재평가 (`kis tui`는 후속)
 4. WebSocket 표면 확대 여부 재평가 (정규장 시세/체결, 다중 구독 UX)
@@ -101,3 +101,5 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-07: 설치된 `rust-cli` skill 문서는 base guidance를 유지하되, `kis`에서 검증된 output-mode resolution, machine-readable error contract, secret redaction, side-effecting command `--dry-run` 패턴을 선택적 일반 규칙으로 반영한다. `rust-cli-kis-style`과 reference 문서는 현재 `--output`/JSON error envelope 계약에 맞춰 동기화한다.
 - 2026-03-07: 국내 시간외 REST 1차(`inquire_overtime_price`, `inquire_overtime_asking_price`)와 해외 계좌 조회 2차(`inquire_psamount`, `inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`)를 Rust domain/CLI에 추가했다.
 - 2026-03-07: `kis ws` 1차로 `/oauth2/Approval` 발급과 국내 시간외 실시간 호가/체결 (`H0STOAA0`, `H0STOUP0`) 수집을 추가했다. 현재 CLI는 count-limited collect + 기본 재연결 + best-effort unsubscribe 모델을 사용한다.
+- 2026-03-08: 해외 시세/시장정보 2차는 한 번에 `chart/search/ranking`까지 넓히지 않고 1차 슬라이스(`dailyprice`, `inquire-asking-price`, `inquire-ccnl`)로 분할한다. 이번 단계는 기존 `price`/`quote` 표면만 확장하고, 해외 차트/검색/랭킹은 후속 태스크로 유지한다.
+- 2026-03-08: 해외 시세/시장정보 2차 1차 슬라이스를 완료했다. `kis price --exchange ... --daily`, `kis quote ask --exchange ...`, `kis quote ccnl --exchange ...`가 Rust domain/CLI에 추가됐고, 검증은 `cargo test --manifest-path rust/Cargo.toml -p kis-core` 및 `-p kis-cli` 기준으로 통과했다.

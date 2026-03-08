@@ -13,7 +13,8 @@ use kis_core::config::AppConfig;
 use kis_core::domestic::{balance, chart, finance, info, market, order, overtime, price, quote};
 use kis_core::error::KisError;
 use kis_core::overseas::{
-    self, balance as overseas_balance, exchange::OrderExchange, order as overseas_order,
+    balance as overseas_balance, exchange::OrderExchange, order as overseas_order,
+    price as overseas_price, quote as overseas_quote,
 };
 use kis_core::ws as kis_ws;
 use serde::Serialize;
@@ -181,7 +182,33 @@ async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Wri
     if let Some(exchange) = args.exchange {
         let exchange = exchange.to_uppercase();
         let symbol = args.symbol.to_uppercase();
-        let price = overseas::price::get_price(&runtime.client, &exchange, &symbol).await?;
+        if args.daily {
+            let prices = overseas_price::get_daily_price(
+                &runtime.client,
+                &exchange,
+                &symbol,
+                Some(args.period.as_str()),
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &prices);
+            }
+
+            let rows = prices
+                .into_iter()
+                .map(|item| {
+                    vec![
+                        item.xymd, item.open, item.high, item.low, item.clos, item.tvol,
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let output =
+                render::render_table(&["날짜", "시가", "고가", "저가", "종가", "거래량"], &rows);
+            writeln!(writer, "{output}")?;
+            return Ok(());
+        }
+
+        let price = overseas_price::get_price(&runtime.client, &exchange, &symbol).await?;
         if runtime.output_json {
             return write_command_json(writer, runtime.command_name, &price);
         }
@@ -259,6 +286,16 @@ async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Wri
 async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Write) -> Result<()> {
     match args.command {
         cli::QuoteCommand::Ask(args) => {
+            if let Some(exchange) = args.exchange.as_deref() {
+                let ask = overseas_quote::get_asking_price(&runtime.client, exchange, &args.stock)
+                    .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &ask);
+                }
+                write_overseas_asking_price(writer, &ask)?;
+                return Ok(());
+            }
+
             let ask = quote::get_asking_price(&runtime.client, &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &ask);
@@ -361,6 +398,37 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
             )?;
         }
         cli::QuoteCommand::Ccnl(args) => {
+            if let Some(exchange) = args.exchange.as_deref() {
+                let items =
+                    overseas_quote::get_conclusions(&runtime.client, exchange, &args.stock).await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            display_or_dash(&item.xhms),
+                            display_or_dash(&item.last),
+                            format!(
+                                "{} {} ({}%)",
+                                price_sign(&item.sign),
+                                display_or_dash(&item.diff),
+                                display_or_dash(&item.rate)
+                            ),
+                            display_or_dash(&item.evol),
+                            display_or_dash(&item.tvol),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &["시각", "현재가", "전일대비", "체결량", "누적거래량"],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items = quote::get_conclusions(&runtime.client, &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &items);
@@ -410,6 +478,65 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
         }
     }
 
+    Ok(())
+}
+
+fn write_overseas_asking_price(
+    writer: &mut dyn Write,
+    ask: &overseas_quote::OverseasAskingPrice,
+) -> Result<()> {
+    let Some(levels) = ask.levels.first() else {
+        let output = render::render_pairs(&[
+            ("현재가", display_or_dash(&ask.quote.last)),
+            ("매도호가", display_or_dash(&ask.quote.pask)),
+            ("매수호가", display_or_dash(&ask.quote.pbid)),
+            ("거래량", display_or_dash(&ask.quote.tvol)),
+        ]);
+        writeln!(writer, "{output}")?;
+        return Ok(());
+    };
+
+    let rows = [
+        vec![
+            display_or_dash(&levels.askv5),
+            display_or_dash(&levels.askp5),
+            display_or_dash(&levels.bidp5),
+            display_or_dash(&levels.bidv5),
+        ],
+        vec![
+            display_or_dash(&levels.askv4),
+            display_or_dash(&levels.askp4),
+            display_or_dash(&levels.bidp4),
+            display_or_dash(&levels.bidv4),
+        ],
+        vec![
+            display_or_dash(&levels.askv3),
+            display_or_dash(&levels.askp3),
+            display_or_dash(&levels.bidp3),
+            display_or_dash(&levels.bidv3),
+        ],
+        vec![
+            display_or_dash(&levels.askv2),
+            display_or_dash(&levels.askp2),
+            display_or_dash(&levels.bidp2),
+            display_or_dash(&levels.bidv2),
+        ],
+        vec![
+            display_or_dash(&levels.askv1),
+            display_or_dash(&levels.askp1),
+            display_or_dash(&levels.bidp1),
+            display_or_dash(&levels.bidv1),
+        ],
+    ];
+    let table = render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows);
+    writeln!(writer, "{table}")?;
+    writeln!(
+        writer,
+        "\n현재가: {}  총매도잔량: {}  총매수잔량: {}",
+        display_or_dash(&ask.quote.last),
+        display_or_dash(&ask.summary.total_askp_rsqn),
+        display_or_dash(&ask.summary.total_bidp_rsqn),
+    )?;
     Ok(())
 }
 
