@@ -572,6 +572,33 @@ fn parses_ws_multi_ask_command() {
 }
 
 #[test]
+fn parses_ws_collect_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "ws",
+        "collect",
+        "ask:005930",
+        "ccnl:000660",
+        "--count",
+        "2",
+    ])
+    .unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Collect(args) = args.command else {
+        panic!("expected ws collect command");
+    };
+
+    assert_eq!(args.requests.len(), 2);
+    assert_eq!(args.requests[0].label(), "ask:005930");
+    assert_eq!(args.requests[1].label(), "ccnl:000660");
+    assert_eq!(args.count, 2);
+}
+
+#[test]
 fn renders_key_value_output() {
     let output = render_pairs(&[
         ("환경", "virtual".to_string()),

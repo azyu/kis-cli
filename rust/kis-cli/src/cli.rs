@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -876,10 +877,73 @@ pub struct WsArgs {
     pub command: WsCommand,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WsCollectKind {
+    Ask,
+    Ccnl,
+    OvertimeAsk,
+    OvertimeCcnl,
+}
+
+impl WsCollectKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::Ccnl => "ccnl",
+            Self::OvertimeAsk => "overtime-ask",
+            Self::OvertimeCcnl => "overtime-ccnl",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WsCollectRequest {
+    pub kind: WsCollectKind,
+    pub stock: String,
+}
+
+impl WsCollectRequest {
+    pub fn label(&self) -> String {
+        format!("{}:{}", self.kind.as_str(), self.stock)
+    }
+}
+
+impl FromStr for WsCollectRequest {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let (kind, stock) = value
+            .split_once(':')
+            .ok_or_else(|| "request must be in KIND:SYMBOL format".to_string())?;
+        if stock.is_empty() {
+            return Err("symbol is required after ':'".to_string());
+        }
+
+        let kind = match kind {
+            "ask" => WsCollectKind::Ask,
+            "ccnl" => WsCollectKind::Ccnl,
+            "overtime-ask" => WsCollectKind::OvertimeAsk,
+            "overtime-ccnl" => WsCollectKind::OvertimeCcnl,
+            _ => {
+                return Err(format!(
+                    "unsupported stream kind '{kind}' (use ask, ccnl, overtime-ask, overtime-ccnl)"
+                ));
+            }
+        };
+
+        Ok(Self {
+            kind,
+            stock: stock.to_string(),
+        })
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum WsCommand {
     #[command(about = "WebSocket approval key 발급")]
     Approval,
+    #[command(about = "여러 실시간 stream 요청 수집")]
+    Collect(WsCollectArgs),
     #[command(about = "국내 정규장 실시간호가 구독")]
     Ask(WsStreamArgs),
     #[command(about = "국내 정규장 실시간체결가 구독")]
@@ -909,6 +973,29 @@ pub struct WsStreamArgs {
     pub reconnects: usize,
 }
 
+#[derive(Debug, Args)]
+pub struct WsCollectArgs {
+    #[arg(
+        value_name = "KIND:SYMBOL",
+        num_args = 1..,
+        help = "실시간 요청 (ask:005930, ccnl:005930, overtime-ask:005930, overtime-ccnl:005930)"
+    )]
+    pub requests: Vec<WsCollectRequest>,
+
+    #[arg(long, default_value_t = 1, help = "요청별 수집할 메시지 개수")]
+    pub count: usize,
+
+    #[arg(
+        long = "timeout-secs",
+        default_value_t = 30,
+        help = "연결/수신 타임아웃(초)"
+    )]
+    pub timeout_secs: u64,
+
+    #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]
+    pub reconnects: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
@@ -916,7 +1003,7 @@ mod tests {
     use super::{
         BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand, InfoCommand,
         MarketCommand, OrderCommand, OutputFormat, QuoteCommand, ReservationCancelRegion,
-        ReservationRegion, WsCommand,
+        ReservationRegion, WsCollectKind, WsCommand,
     };
 
     #[test]
@@ -1514,6 +1601,40 @@ mod tests {
             vec!["005930".to_string(), "000660".to_string()]
         );
         assert_eq!(args.count, 2);
+    }
+
+    #[test]
+    fn parses_ws_collect_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "collect",
+            "ask:005930",
+            "ccnl:000660",
+            "--count",
+            "2",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Collect(args) = args.command else {
+            panic!("expected ws collect command");
+        };
+
+        assert_eq!(args.requests.len(), 2);
+        assert_eq!(args.requests[0].kind, WsCollectKind::Ask);
+        assert_eq!(args.requests[0].stock, "005930");
+        assert_eq!(args.requests[1].kind, WsCollectKind::Ccnl);
+        assert_eq!(args.requests[1].stock, "000660");
+        assert_eq!(args.count, 2);
+    }
+
+    #[test]
+    fn rejects_ws_collect_request_without_separator() {
+        let cli = Cli::try_parse_from(["kis", "ws", "collect", "ask005930"]);
+        assert!(cli.is_err());
     }
 
     #[test]

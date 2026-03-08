@@ -115,6 +115,14 @@ struct WsSymbolPayloads {
 }
 
 #[derive(Debug, Serialize)]
+struct WsRequestPayloads {
+    request: String,
+    kind: String,
+    stock: String,
+    payloads: Vec<kis_ws::RealtimePayload>,
+}
+
+#[derive(Debug, Serialize)]
 struct OrderOutput {
     side: &'static str,
     order_org_no: String,
@@ -3033,6 +3041,13 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                 render::render_pairs(&[("approval_key", display_or_dash(&approval.approval_key))]);
             writeln!(writer, "{output}")?;
         }
+        cli::WsCommand::Collect(args) => {
+            let requests = collect_ws_requests(runtime, &args).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &requests);
+            }
+            write_ws_request_payloads(writer, &requests)?;
+        }
         cli::WsCommand::Ask(args) => {
             if let [stock] = args.stocks.as_slice() {
                 let payloads = kis_ws::collect_realtime_messages(
@@ -3147,6 +3162,35 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
     Ok(())
 }
 
+async fn collect_ws_requests(
+    runtime: &Runtime,
+    args: &cli::WsCollectArgs,
+) -> Result<Vec<WsRequestPayloads>> {
+    let approval = kis_ws::fetch_approval_key(&runtime.config).await?;
+    let mut requests = Vec::with_capacity(args.requests.len());
+
+    for request in &args.requests {
+        let payloads = kis_ws::collect_realtime_messages_with_approval_key(
+            &runtime.config,
+            &approval.approval_key,
+            ws_collect_spec(request.kind),
+            &request.stock,
+            args.count,
+            Duration::from_secs(args.timeout_secs),
+            args.reconnects,
+        )
+        .await?;
+        requests.push(WsRequestPayloads {
+            request: request.label(),
+            kind: request.kind.as_str().to_string(),
+            stock: request.stock.clone(),
+            payloads,
+        });
+    }
+
+    Ok(requests)
+}
+
 async fn collect_ws_symbol_payloads(
     runtime: &Runtime,
     spec: kis_ws::RealtimeSpec,
@@ -3173,6 +3217,38 @@ async fn collect_ws_symbol_payloads(
     }
 
     Ok(streams)
+}
+
+fn ws_collect_spec(kind: cli::WsCollectKind) -> kis_ws::RealtimeSpec {
+    match kind {
+        cli::WsCollectKind::Ask => kis_ws::domestic_asking_price_spec(),
+        cli::WsCollectKind::Ccnl => kis_ws::domestic_ccnl_spec(),
+        cli::WsCollectKind::OvertimeAsk => kis_ws::domestic_overtime_asking_price_spec(),
+        cli::WsCollectKind::OvertimeCcnl => kis_ws::domestic_overtime_ccnl_spec(),
+    }
+}
+
+fn write_ws_request_payloads(writer: &mut dyn Write, requests: &[WsRequestPayloads]) -> Result<()> {
+    if requests.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    for (index, request) in requests.iter().enumerate() {
+        if index > 0 {
+            writeln!(writer)?;
+        }
+        writeln!(writer, "요청: {}", request.request)?;
+        match request.kind.as_str() {
+            "ask" => write_ws_ask(writer, &request.payloads)?,
+            "ccnl" => write_ws_ccnl(writer, &request.payloads)?,
+            "overtime-ask" => write_ws_overtime_ask(writer, &request.payloads)?,
+            "overtime-ccnl" => write_ws_overtime_ccnl(writer, &request.payloads)?,
+            _ => unreachable!("validated ws collect kind"),
+        }
+    }
+
+    Ok(())
 }
 
 fn write_ws_symbol_payloads(
@@ -3839,11 +3915,12 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        KisError, OverseasModifyMode, OverseasPlaceMode, WsSymbolPayloads,
+        KisError, OverseasModifyMode, OverseasPlaceMode, WsRequestPayloads, WsSymbolPayloads,
         build_overseas_screener_request, classify_error, config_output, display_or_dash,
         mask_app_key, order_output, overseas_modify_mode, overseas_place_mode, price_sign,
         reserve_order_output, validation_error, write_command_json, write_json_error,
-        write_json_raw, write_ws_ask, write_ws_ccnl, write_ws_symbol_payloads, yn_to_mark,
+        write_json_raw, write_ws_ask, write_ws_ccnl, write_ws_request_payloads,
+        write_ws_symbol_payloads, yn_to_mark,
     };
 
     #[test]
@@ -4242,5 +4319,63 @@ mod tests {
         assert!(output.contains("종목: 005930"));
         assert!(output.contains("종목: 000660"));
         assert!(output.contains("180100"));
+    }
+
+    #[test]
+    fn writes_mixed_ws_request_output_with_headers() {
+        let requests = vec![
+            WsRequestPayloads {
+                request: "ask:005930".to_string(),
+                kind: "ask".to_string(),
+                stock: "005930".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090001".to_string()),
+                        ("askp1".to_string(), "70010".to_string()),
+                        ("askp_rsqn1".to_string(), "30".to_string()),
+                        ("bidp1".to_string(), "70000".to_string()),
+                        ("bidp_rsqn1".to_string(), "40".to_string()),
+                        ("total_askp_rsqn".to_string(), "1000".to_string()),
+                        ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                        ("antc_cnpr".to_string(), "70000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+            WsRequestPayloads {
+                request: "ccnl:000660".to_string(),
+                kind: "ccnl".to_string(),
+                stock: "000660".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STCNT0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("stck_cntg_hour".to_string(), "090002".to_string()),
+                        ("stck_prpr".to_string(), "180000".to_string()),
+                        ("prdy_vrss_sign".to_string(), "2".to_string()),
+                        ("prdy_vrss".to_string(), "1000".to_string()),
+                        ("prdy_ctrt".to_string(), "0.56".to_string()),
+                        ("cntg_vol".to_string(), "10".to_string()),
+                        ("acml_vol".to_string(), "100".to_string()),
+                        ("ccld_dvsn".to_string(), "1".to_string()),
+                        ("cttr".to_string(), "110.0".to_string()),
+                        ("askp1".to_string(), "180100".to_string()),
+                        ("bidp1".to_string(), "180000".to_string()),
+                        ("hour_cls_code".to_string(), "0".to_string()),
+                        ("mrkt_trtm_cls_code".to_string(), "1".to_string()),
+                        ("vi_stnd_prc".to_string(), "175000".to_string()),
+                    ])],
+                }],
+            },
+        ];
+
+        let mut writer = Vec::new();
+        write_ws_request_payloads(&mut writer, &requests).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("요청: ask:005930"));
+        assert!(output.contains("요청: ccnl:000660"));
+        assert!(output.contains("70010"));
+        assert!(output.contains("VI기준가"));
     }
 }

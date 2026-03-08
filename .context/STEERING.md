@@ -61,8 +61,11 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: 국내 시간외 REST 2차(`overtime_fluctuation`, `overtime_volume`)를 완료했다. 두 명령은 추가 필터 없이 `kis market overtime-fluctuation`과 `kis market overtime-volume`만 제공하고, screen code/시장범위/정렬·등락 구분은 공식 샘플 기본값(`20234` + 상승률, `20235` + 거래량, `0000`)으로 고정한다.
 - 2026-03-08: WebSocket 표면 확대는 `정규장 호가/체결 1차`와 `다중 구독 UX`로 분리한다. 먼저 공식 실시간 TR `H0STASP0`/`H0STCNT0`를 기존 count-limited collect 모델에 얹고, 다중 구독 UX는 후속으로 남긴다.
 - 2026-03-08: WebSocket 다중 구독 UX도 다시 `동일 spec 다중 종목`과 `mixed spec/mixed stream`으로 분리한다. 먼저 같은 TR에 여러 종목을 붙이는 수준까지만 구현하고, 서로 다른 stream을 한 번에 섞는 입력 surface는 후속으로 남긴다.
+- 2026-03-08: `mixed spec` 단계에서도 진짜 동시 multiplex collector를 먼저 만들지 않는다. 우선은 approval key 재사용 + 기존 collector 조합으로 mixed input surface를 제공하고, 필요 시 이후에 동시 수집 모델을 검토한다.
 - 2026-03-08: WebSocket 표면 확대 1차를 완료했다. `kis ws ask <symbol>`와 `kis ws ccnl <symbol>`를 추가하고, 기존 `kis ws overtime-ask|overtime-ccnl`의 approval-key + count-limited collect + 기본 재연결 모델을 그대로 재사용한다. 다중 구독 UX는 이번 단계에 넣지 않는다.
 - 2026-03-08: WebSocket 다중 구독 UX 1차를 완료했다. `kis ws ask|ccnl|overtime-ask|overtime-ccnl <symbol>...`가 같은 spec 안에서 여러 종목을 순차 수집할 수 있고, approval key는 한 번만 발급해 종목별 수집에 재사용한다. `--count`는 종목별 메시지 개수로 해석한다.
+- 2026-03-08: WebSocket 다중 구독 UX 2차를 완료했다. 전용 `kis ws collect KIND:SYMBOL...` surface로 `ask|ccnl|overtime-ask|overtime-ccnl`를 섞어 요청할 수 있고, 수집은 요청별 순차 처리지만 approval key는 1회만 발급해 재사용한다. `--count`는 요청별 메시지 개수다.
+- 2026-03-08: WebSocket 실시간 시세 표면 확대 backlog는 이번 단계로 닫는다. 후속으로 동시 multiplex 모델을 검토하더라도 별도 성능/UX 마일스톤으로 취급한다.
 - 2026-03-08: 다음 `ranking` 슬라이스는 기존 `market` 표면에 자연스럽게 들어가는 최소 범위로 제한한다. 우선 후보는 `trade-vol`과 `market-cap`이며, `price_fluct`/`new_highlow`/`volume_surge`는 후속으로 남긴다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `chart` 슬라이스를 완료했다. `kis chart daily|time ... --exchange <quote-exchange>`가 해외 종목 차트로 라우팅된다. 이번 단계는 해외 종목 일별/분별 차트만 포함하며, 해외 시간차트는 기본 1페이지(`NREC=120`) 조회로 제한한다.
 - 2026-03-08: 남은 해외 시세/시장정보 2차 잔여분은 `chart -> search/info -> ranking` 순서의 단계형 슬라이스로 진행한다. `chart` 계열을 완료했고 다음 단계는 `search/info`다. 리더 에이전트가 구현을 소유하고 오케스트레이터가 범위/검증/인수인계를 관리한다.
