@@ -690,6 +690,10 @@ pub enum MarketCommand {
     NewHighlow(OverseasMarketArgs),
     #[command(about = "해외 거래량 급증 순위 조회")]
     VolumeSurge(OverseasMarketArgs),
+    #[command(about = "국내 시간외 등락율 순위 조회")]
+    OvertimeFluctuation,
+    #[command(about = "국내 시간외 거래량 순위 조회")]
+    OvertimeVolume,
     #[command(about = "휴장일 조회")]
     Holiday(HolidayArgs),
 }
@@ -1613,6 +1617,28 @@ mod tests {
         };
 
         assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_market_overtime_fluctuation_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "overtime-fluctuation"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::OvertimeFluctuation = args.command else {
+            panic!("expected market overtime-fluctuation command");
+        };
+    }
+
+    #[test]
+    fn parses_market_overtime_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "overtime-volume"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::OvertimeVolume = args.command else {
+            panic!("expected market overtime-volume command");
+        };
     }
 
     #[test]

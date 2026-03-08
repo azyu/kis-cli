@@ -284,6 +284,32 @@ fn parses_overseas_market_volume_surge_command() {
 }
 
 #[test]
+fn parses_market_overtime_fluctuation_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "overtime-fluctuation"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::OvertimeFluctuation = args.command else {
+        panic!("expected market overtime-fluctuation command");
+    };
+}
+
+#[test]
+fn parses_market_overtime_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "overtime-volume"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::OvertimeVolume = args.command else {
+        panic!("expected market overtime-volume command");
+    };
+}
+
+#[test]
 fn parses_overseas_quote_ask_command() {
     let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
 

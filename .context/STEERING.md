@@ -46,6 +46,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 해외 주문/잔고 계열은 Rust 구현 기준으로도 payload shape와 모의투자 지원 여부를 단계별로 검증해야 한다.
 - 미국 주간주문/정정취소는 공식 예제 기준 실전 TR ID만 확인된다. 모의투자 TR ID는 추정하지 말고 명시적으로 거절한다.
 - `overtime_ccnl_krx`는 open-trading-api 예제 기준 WebSocket 실시간 체결(TR `H0STOUP0`)만 확인된다. REST 마일스톤에 섞지 않는다.
+- `overtime_asking_price_krx`도 open-trading-api 예제 기준 WebSocket 실시간 호가(TR `H0STOAA0`)만 확인된다. REST 2차 범위에 다시 넣지 않는다.
 
 ## Decisions Log
 
@@ -56,6 +57,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: 해외 `inquire_search`는 조건검색 API라서 국내 `info search`의 키워드 검색 의미와 다르다. 다수 필터 플래그를 요구해 계약이 커지므로 이번 단계에서는 제외하고 후속 슬라이스로 남긴다.
 - 2026-03-08: 해외 `inquire_search`를 별도 `kis info screener --exchange <quote-exchange> ...` 표면으로 구현했다. `info search`는 국내 키워드 검색 의미를 유지하고, screener는 API가 제공하는 8개 범위 필터만 `--*-start/--*-end` 쌍으로 노출한다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분(`chart`, `search_info`, `inquire_search`, `ranking`)은 이번 단계로 모두 완료됐다. 다음 우선순위는 해외 market-info가 아니라 E2E/live smoke와 나머지 비시세 마일스톤이다.
+- 2026-03-08: 국내 시간외 REST 2차는 `market` 표면에 `kis market overtime-fluctuation`과 `kis market overtime-volume`만 추가한다. `overtime_asking_price_krx`와 `overtime_ccnl_krx`는 REST가 아니라 WebSocket 항목이므로 다시 넣지 않는다.
+- 2026-03-08: 국내 시간외 REST 2차(`overtime_fluctuation`, `overtime_volume`)를 완료했다. 두 명령은 추가 필터 없이 `kis market overtime-fluctuation`과 `kis market overtime-volume`만 제공하고, screen code/시장범위/정렬·등락 구분은 공식 샘플 기본값(`20234` + 상승률, `20235` + 거래량, `0000`)으로 고정한다.
 - 2026-03-08: 다음 `ranking` 슬라이스는 기존 `market` 표면에 자연스럽게 들어가는 최소 범위로 제한한다. 우선 후보는 `trade-vol`과 `market-cap`이며, `price_fluct`/`new_highlow`/`volume_surge`는 후속으로 남긴다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `chart` 슬라이스를 완료했다. `kis chart daily|time ... --exchange <quote-exchange>`가 해외 종목 차트로 라우팅된다. 이번 단계는 해외 종목 일별/분별 차트만 포함하며, 해외 시간차트는 기본 1페이지(`NREC=120`) 조회로 제한한다.
 - 2026-03-08: 남은 해외 시세/시장정보 2차 잔여분은 `chart -> search/info -> ranking` 순서의 단계형 슬라이스로 진행한다. `chart` 계열을 완료했고 다음 단계는 `search/info`다. 리더 에이전트가 구현을 소유하고 오케스트레이터가 범위/검증/인수인계를 관리한다.

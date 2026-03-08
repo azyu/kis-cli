@@ -74,11 +74,12 @@
 - [x] 해외주식 시세/시장정보 2차 잔여분 3차 1차 (`ranking`: `trade-vol`, `market-cap`) — Agent: Leader
 - [x] 해외주식 시세/시장정보 2차 잔여분 3차 2차 (`price_fluct`, `new_highlow`, `volume_surge`) — Agent: Leader
 - [x] 해외주식 시세/시장정보 2차 잔여분 2차 2차 (`inquire_search` 조건검색) — Agent: Leader
+- [x] 시간외 거래 API 2차 1차 (`overtime_fluctuation`, `overtime_volume`) — Agent: Leader
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain
 - [x] 해외주식 잔고/체결 API 구현 — Agent: Domain
-- [ ] 시간외 거래 API 2차 (`overtime_asking_price_krx`, `overtime_fluctuation`, `overtime_volume`) — Agent: Main
+- [x] 시간외 거래 API 2차 (`overtime_fluctuation`, `overtime_volume`) — Agent: Main
 - [ ] WebSocket 실시간 시세 표면 확대 (정규장 시세/체결, 다중 구독 UX) — Agent: Core
 - [ ] E2E 통합 테스트 (모의투자) — Agent: Quality
 - [ ] ratatui 기반 TUI (`kis tui`) 검토 및 도입 — Agent: CLI

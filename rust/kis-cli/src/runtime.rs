@@ -2551,6 +2551,127 @@ async fn run_market(
                 &[("요약", summary)],
             )?;
         }
+        cli::MarketCommand::OvertimeFluctuation => {
+            let result = market::get_overtime_fluctuation_rank(&runtime.client).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["mksc_shrn_iscd", "stck_shrn_iscd"]),
+                        json_cell_alias(row, &["hts_kor_isnm"]),
+                        json_cell_alias(row, &["ovtm_untp_prpr"]),
+                        format!(
+                            "{} {}",
+                            price_sign(&json_cell_alias(row, &["ovtm_untp_prdy_vrss_sign"])),
+                            json_cell_alias(row, &["ovtm_untp_prdy_vrss"])
+                        ),
+                        json_cell_alias(row, &["ovtm_untp_prdy_ctrt"]),
+                        json_cell_alias(row, &["ovtm_untp_vol"]),
+                        json_cell_alias(row, &["ovtm_vrss_acml_vol_rlim"]),
+                        json_cell_alias(row, &["stck_prpr"]),
+                        json_cell_alias(row, &["bidp", "ovtm_untp_bidp1"]),
+                        json_cell_alias(row, &["askp", "ovtm_untp_askp1"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("상한", "ovtm_untp_uplm_issu_cnt"),
+                    ("상승", "ovtm_untp_ascn_issu_cnt"),
+                    ("보합", "ovtm_untp_stnr_issu_cnt"),
+                    ("하한", "ovtm_untp_lslm_issu_cnt"),
+                    ("하락", "ovtm_untp_down_issu_cnt"),
+                    ("누적거래량", "ovtm_untp_acml_vol"),
+                    ("누적거래대금", "ovtm_untp_acml_tr_pbmn"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "시간외가",
+                        "전일대비",
+                        "등락율",
+                        "거래량",
+                        "거래량비중",
+                        "정규장가",
+                        "매수호가",
+                        "매도호가",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::OvertimeVolume => {
+            let result = market::get_overtime_volume_rank(&runtime.client).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["stck_shrn_iscd", "mksc_shrn_iscd"]),
+                        json_cell_alias(row, &["hts_kor_isnm"]),
+                        json_cell_alias(row, &["ovtm_untp_prpr"]),
+                        format!(
+                            "{} {}",
+                            price_sign(&json_cell_alias(row, &["ovtm_untp_prdy_vrss_sign"])),
+                            json_cell_alias(row, &["ovtm_untp_prdy_vrss"])
+                        ),
+                        json_cell_alias(row, &["ovtm_untp_prdy_ctrt"]),
+                        json_cell_alias(row, &["ovtm_untp_vol"]),
+                        json_cell_alias(row, &["ovtm_vrss_acml_vol_rlim"]),
+                        json_cell_alias(row, &["ovtm_untp_shnu_rsqn"]),
+                        json_cell_alias(row, &["ovtm_untp_seln_rsqn"]),
+                        json_cell_alias(row, &["stck_prpr"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소거래량", "ovtm_untp_exch_vol"),
+                    ("거래소거래대금", "ovtm_untp_exch_tr_pbmn"),
+                    ("코스닥거래량", "ovtm_untp_kosdaq_vol"),
+                    ("코스닥거래대금", "ovtm_untp_kosdaq_tr_pbmn"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "시간외가",
+                        "전일대비",
+                        "등락율",
+                        "거래량",
+                        "거래량비중",
+                        "매수잔량",
+                        "매도잔량",
+                        "정규장가",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
         cli::MarketCommand::Holiday(args) => {
             let items = market::get_holidays(&runtime.client, &args.date).await?;
             if runtime.output_json {
