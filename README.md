@@ -206,6 +206,23 @@ kis config --quiet
 - 주문 자동화 전에는 `--dry-run`으로 endpoint, TR ID, 요청 payload를 먼저 확인할 수 있습니다.
 - `--quiet`은 text 모드에서만 추가 문구를 제거합니다.
 
+## Virtual E2E Smoke
+
+기본 `make test`에는 실제 모의투자 smoke가 포함되지 않습니다. opt-in으로만 실행합니다.
+
+```bash
+export KIS_E2E_VIRTUAL=1
+export KIS_E2E_VIRTUAL_CONFIG=~/.config/kis/config.yaml
+export KIS_E2E_VIRTUAL_STOCK=005930
+make test-e2e-virtual
+```
+
+- `KIS_E2E_VIRTUAL=1`이 있어야 ignored smoke가 실제 호출을 수행합니다.
+- `KIS_E2E_VIRTUAL_CONFIG`는 모의투자 자격증명이 들어 있는 설정 파일 경로입니다.
+- `KIS_E2E_VIRTUAL_STOCK`은 선택 사항이며 기본값은 `005930`입니다.
+- 1차 harness는 `config`, `price`, `price --daily`만 포함합니다.
+- known virtual blocker인 `quote ask`, `market holiday`, `info search`, `psbl-sell`은 의도적으로 제외했습니다.
+
 ## 지원 표면
 
 - `price`: 국내 현재가/일별시세, 해외 현재가/기간시세
