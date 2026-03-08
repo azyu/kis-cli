@@ -733,6 +733,8 @@ pub enum InfoCommand {
     Opinion(SymbolArgs),
     #[command(about = "종목검색")]
     Search(SearchArgs),
+    #[command(about = "해외주식 상품기본정보 조회")]
+    Detail(OverseasInfoDetailArgs),
 }
 
 #[derive(Debug, Args)]
@@ -758,6 +760,20 @@ pub struct ExchangeSymbolArgs {
 pub struct SearchArgs {
     #[arg(help = "키워드")]
     pub keyword: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasInfoDetailArgs {
+    #[arg(help = "종목코드 또는 티커")]
+    pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
 }
 
 #[derive(Debug, Args)]
@@ -1453,5 +1469,20 @@ mod tests {
         };
 
         assert_eq!(args.keyword, "삼성");
+    }
+
+    #[test]
+    fn parses_overseas_info_detail_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "info", "detail", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Info(args) = cli.command else {
+            panic!("expected info command");
+        };
+        let InfoCommand::Detail(args) = args.command else {
+            panic!("expected info detail command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange, "NAS");
     }
 }

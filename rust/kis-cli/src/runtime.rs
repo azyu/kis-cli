@@ -14,7 +14,8 @@ use kis_core::domestic::{balance, chart, finance, info, market, order, overtime,
 use kis_core::error::KisError;
 use kis_core::overseas::{
     balance as overseas_balance, chart as overseas_chart, exchange::OrderExchange,
-    order as overseas_order, price as overseas_price, quote as overseas_quote,
+    info as overseas_info, order as overseas_order, price as overseas_price,
+    quote as overseas_quote,
 };
 use kis_core::ws as kis_ws;
 use serde::Serialize;
@@ -2457,6 +2458,56 @@ async fn run_info(runtime: &Runtime, args: cli::InfoArgs, writer: &mut dyn Write
                 .collect::<Vec<_>>();
             let table = render::render_table(&["종목코드", "종목명", "영문명", "시장"], &rows);
             writeln!(writer, "{table}")?;
+        }
+        cli::InfoCommand::Detail(args) => {
+            let item =
+                overseas_info::get_product_info(&runtime.client, &args.exchange, &args.stock)
+                    .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &item);
+            }
+
+            let output = render::render_pairs(&[
+                (
+                    "종목코드",
+                    display_or_dash(&json_string_alias(&item, &["pdno", "PDNO"])),
+                ),
+                (
+                    "종목명",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &["prdt_name", "PRDT_NAME", "prdt_abrv_name", "PRDT_ABRV_NAME"],
+                    )),
+                ),
+                (
+                    "영문명",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &["prdt_eng_name", "PRDT_ENG_NAME"],
+                    )),
+                ),
+                (
+                    "상품유형",
+                    display_or_dash(&json_string_alias(&item, &["prdt_type_cd", "PRDT_TYPE_CD"])),
+                ),
+                (
+                    "거래소",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &[
+                            "ovrs_excg_cd",
+                            "OVRS_EXCG_CD",
+                            "excg_dvsn_cd",
+                            "EXCG_DVSN_CD",
+                        ],
+                    )),
+                ),
+                (
+                    "통화",
+                    display_or_dash(&json_string_alias(&item, &["tr_crcy_cd", "TR_CRCY_CD"])),
+                ),
+            ]);
+            writeln!(writer, "{output}")?;
         }
     }
 

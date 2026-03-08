@@ -150,6 +150,22 @@ fn parses_overseas_time_chart_command() {
 }
 
 #[test]
+fn parses_overseas_info_detail_command() {
+    let cli = Cli::try_parse_from(["kis", "info", "detail", "AAPL", "--exchange", "NAS"]).unwrap();
+
+    let Command::Info(args) = cli.command else {
+        panic!("expected info command");
+    };
+
+    let kis_cli::cli::InfoCommand::Detail(args) = args.command else {
+        panic!("expected info detail command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
 fn parses_overseas_quote_ask_command() {
     let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
 
