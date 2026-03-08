@@ -133,6 +133,8 @@ kis balance reserve-orders --region us --start 20260301 --end 20260307 --exchang
 
 ```bash
 kis ws approval
+kis ws ask 005930 --count 1
+kis ws ccnl 005930 --count 3
 kis ws overtime-ask 005930 --count 1
 kis ws overtime-ccnl 005930 --count 3
 ```
@@ -208,7 +210,7 @@ kis config --quiet
 - `market`: 국내 거래량 순위/시간외 등락율 순위/시간외 거래량 순위/휴장일, 해외 거래량 순위/시가총액 순위/급등락 순위/신고가·신저가 순위/거래량 급증 순위
 - `finance`: 재무상태표, 손익계산서, 재무비율
 - `info`: 국내 배당정보/뉴스/투자의견/종목검색, 해외 상품기본정보/조건검색
-- `ws`: approval key 발급, 국내 시간외 실시간 호가/체결
+- `ws`: approval key 발급, 국내 정규장/시간외 실시간 호가/체결
 - `config`: 현재 설정 출력
 
 모의투자(`virtual`)에서는 일부 국내 읽기 API가 KIS 측 제한으로 `404` 또는 `EGW2004`를 반환할 수 있습니다.

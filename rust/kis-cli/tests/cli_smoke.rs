@@ -520,6 +520,38 @@ fn parses_ws_approval_command() {
 }
 
 #[test]
+fn parses_ws_ask_command() {
+    let cli = Cli::try_parse_from(["kis", "ws", "ask", "005930", "--count", "2"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ask(args) = args.command else {
+        panic!("expected ws ask command");
+    };
+
+    assert_eq!(args.stock, "005930");
+    assert_eq!(args.count, 2);
+}
+
+#[test]
+fn parses_ws_ccnl_command() {
+    let cli = Cli::try_parse_from(["kis", "ws", "ccnl", "005930", "--reconnects", "1"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ccnl(args) = args.command else {
+        panic!("expected ws ccnl command");
+    };
+
+    assert_eq!(args.stock, "005930");
+    assert_eq!(args.reconnects, 1);
+}
+
+#[test]
 fn renders_key_value_output() {
     let output = render_pairs(&[
         ("환경", "virtual".to_string()),

@@ -18,6 +18,68 @@ const CUSTTYPE_PERSONAL: &str = "P";
 
 pub type RealtimeRow = BTreeMap<String, String>;
 
+pub const DOMESTIC_ASKING_PRICE_COLUMNS: &[&str] = &[
+    "mksc_shrn_iscd",
+    "bsop_hour",
+    "hour_cls_code",
+    "askp1",
+    "askp2",
+    "askp3",
+    "askp4",
+    "askp5",
+    "askp6",
+    "askp7",
+    "askp8",
+    "askp9",
+    "askp10",
+    "bidp1",
+    "bidp2",
+    "bidp3",
+    "bidp4",
+    "bidp5",
+    "bidp6",
+    "bidp7",
+    "bidp8",
+    "bidp9",
+    "bidp10",
+    "askp_rsqn1",
+    "askp_rsqn2",
+    "askp_rsqn3",
+    "askp_rsqn4",
+    "askp_rsqn5",
+    "askp_rsqn6",
+    "askp_rsqn7",
+    "askp_rsqn8",
+    "askp_rsqn9",
+    "askp_rsqn10",
+    "bidp_rsqn1",
+    "bidp_rsqn2",
+    "bidp_rsqn3",
+    "bidp_rsqn4",
+    "bidp_rsqn5",
+    "bidp_rsqn6",
+    "bidp_rsqn7",
+    "bidp_rsqn8",
+    "bidp_rsqn9",
+    "bidp_rsqn10",
+    "total_askp_rsqn",
+    "total_bidp_rsqn",
+    "ovtm_total_askp_rsqn",
+    "ovtm_total_bidp_rsqn",
+    "antc_cnpr",
+    "antc_cnqn",
+    "antc_vol",
+    "antc_cntg_vrss",
+    "antc_cntg_vrss_sign",
+    "antc_cntg_prdy_ctrt",
+    "acml_vol",
+    "total_askp_rsqn_icdc",
+    "total_bidp_rsqn_icdc",
+    "ovtm_total_askp_icdc",
+    "ovtm_total_bidp_icdc",
+    "stck_deal_cls_code",
+];
+
 pub const DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS: &[&str] = &[
     "mksc_shrn_iscd",
     "bsop_hour",
@@ -73,6 +135,55 @@ pub const DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS: &[&str] = &[
     "total_bidp_rsqn_icdc",
     "ovtm_total_askp_icdc",
     "ovtm_total_bidp_icdc",
+];
+
+pub const DOMESTIC_CCNL_COLUMNS: &[&str] = &[
+    "mksc_shrn_iscd",
+    "stck_cntg_hour",
+    "stck_prpr",
+    "prdy_vrss_sign",
+    "prdy_vrss",
+    "prdy_ctrt",
+    "wghn_avrg_stck_prc",
+    "stck_oprc",
+    "stck_hgpr",
+    "stck_lwpr",
+    "askp1",
+    "bidp1",
+    "cntg_vol",
+    "acml_vol",
+    "acml_tr_pbmn",
+    "seln_cntg_csnu",
+    "shnu_cntg_csnu",
+    "ntby_cntg_csnu",
+    "cttr",
+    "seln_cntg_smtn",
+    "shnu_cntg_smtn",
+    "ccld_dvsn",
+    "shnu_rate",
+    "prdy_vol_vrss_acml_vol_rate",
+    "oprc_hour",
+    "oprc_vrss_prpr_sign",
+    "oprc_vrss_prpr",
+    "hgpr_hour",
+    "hgpr_vrss_prpr_sign",
+    "hgpr_vrss_prpr",
+    "lwpr_hour",
+    "lwpr_vrss_prpr_sign",
+    "lwpr_vrss_prpr",
+    "bsop_date",
+    "new_mkop_cls_code",
+    "trht_yn",
+    "askp_rsqn1",
+    "bidp_rsqn1",
+    "total_askp_rsqn",
+    "total_bidp_rsqn",
+    "vol_tnrt",
+    "prdy_smns_hour_acml_vol",
+    "prdy_smns_hour_acml_vol_rate",
+    "hour_cls_code",
+    "mrkt_trtm_cls_code",
+    "vi_stnd_prc",
 ];
 
 pub const DOMESTIC_OVERTIME_CCNL_COLUMNS: &[&str] = &[
@@ -199,10 +310,24 @@ enum ParsedMessage {
     PingPong,
 }
 
+pub fn domestic_asking_price_spec() -> RealtimeSpec {
+    RealtimeSpec {
+        tr_id: "H0STASP0",
+        columns: DOMESTIC_ASKING_PRICE_COLUMNS,
+    }
+}
+
 pub fn domestic_overtime_asking_price_spec() -> RealtimeSpec {
     RealtimeSpec {
         tr_id: "H0STOAA0",
         columns: DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS,
+    }
+}
+
+pub fn domestic_ccnl_spec() -> RealtimeSpec {
+    RealtimeSpec {
+        tr_id: "H0STCNT0",
+        columns: DOMESTIC_CCNL_COLUMNS,
     }
 }
 
@@ -521,8 +646,8 @@ fn parse_system_message(raw: &str) -> Result<ParsedMessage> {
 mod tests {
     use super::{
         DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS, ParsedMessage, build_control_message,
-        domestic_overtime_asking_price_spec, domestic_overtime_ccnl_spec, parse_message,
-        parse_realtime_payload,
+        domestic_asking_price_spec, domestic_ccnl_spec, domestic_overtime_asking_price_spec,
+        domestic_overtime_ccnl_spec, parse_message, parse_realtime_payload,
     };
 
     #[test]
@@ -602,5 +727,20 @@ mod tests {
             ccnl.columns.last().copied(),
             Some("prdy_smns_hour_acml_vol_rate")
         );
+    }
+
+    #[test]
+    fn exposes_official_regular_session_specs() {
+        let ask = domestic_asking_price_spec();
+        let ccnl = domestic_ccnl_spec();
+
+        assert_eq!(ask.tr_id, "H0STASP0");
+        assert_eq!(ccnl.tr_id, "H0STCNT0");
+        assert_eq!(ask.columns.len(), 59);
+        assert_eq!(ccnl.columns.len(), 46);
+        assert_eq!(ask.columns.first().copied(), Some("mksc_shrn_iscd"));
+        assert_eq!(ask.columns.last().copied(), Some("stck_deal_cls_code"));
+        assert_eq!(ccnl.columns.first().copied(), Some("mksc_shrn_iscd"));
+        assert_eq!(ccnl.columns.last().copied(), Some("vi_stnd_prc"));
     }
 }

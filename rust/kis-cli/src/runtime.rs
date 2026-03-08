@@ -3027,6 +3027,36 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                 render::render_pairs(&[("approval_key", display_or_dash(&approval.approval_key))]);
             writeln!(writer, "{output}")?;
         }
+        cli::WsCommand::Ask(args) => {
+            let payloads = kis_ws::collect_realtime_messages(
+                &runtime.config,
+                kis_ws::domestic_asking_price_spec(),
+                &args.stock,
+                args.count,
+                Duration::from_secs(args.timeout_secs),
+                args.reconnects,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &payloads);
+            }
+            write_ws_ask(writer, &payloads)?;
+        }
+        cli::WsCommand::Ccnl(args) => {
+            let payloads = kis_ws::collect_realtime_messages(
+                &runtime.config,
+                kis_ws::domestic_ccnl_spec(),
+                &args.stock,
+                args.count,
+                Duration::from_secs(args.timeout_secs),
+                args.reconnects,
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &payloads);
+            }
+            write_ws_ccnl(writer, &payloads)?;
+        }
         cli::WsCommand::OvertimeAsk(args) => {
             let payloads = kis_ws::collect_realtime_messages(
                 &runtime.config,
@@ -3062,6 +3092,45 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
     Ok(())
 }
 
+fn write_ws_ask(writer: &mut dyn Write, payloads: &[kis_ws::RealtimePayload]) -> Result<()> {
+    let mut wrote_any = false;
+
+    for (index, payload) in payloads.iter().enumerate() {
+        for row in &payload.rows {
+            if wrote_any {
+                writeln!(writer)?;
+            }
+            if payloads.len() > 1 {
+                writeln!(writer, "message {}", index + 1)?;
+            }
+            writeln!(
+                writer,
+                "{}",
+                render::render_table(
+                    &["매도잔량", "매도호가", "매수호가", "매수잔량"],
+                    &realtime_orderbook_rows(row, 10),
+                )
+            )?;
+            writeln!(
+                writer,
+                "\n시각: {}  총매도잔량: {}  총매수잔량: {}  예상체결가: {}  매매구분: {}",
+                realtime_cell(row, "bsop_hour"),
+                realtime_cell(row, "total_askp_rsqn"),
+                realtime_cell(row, "total_bidp_rsqn"),
+                realtime_cell(row, "antc_cnpr"),
+                realtime_cell(row, "stck_deal_cls_code"),
+            )?;
+            wrote_any = true;
+        }
+    }
+
+    if !wrote_any {
+        writeln!(writer, "데이터가 없습니다.")?;
+    }
+
+    Ok(())
+}
+
 fn write_ws_overtime_ask(
     writer: &mut dyn Write,
     payloads: &[kis_ws::RealtimePayload],
@@ -3076,42 +3145,13 @@ fn write_ws_overtime_ask(
             if payloads.len() > 1 {
                 writeln!(writer, "message {}", index + 1)?;
             }
-            let rows = [
-                vec![
-                    realtime_cell(row, "askp_rsqn5"),
-                    realtime_cell(row, "askp5"),
-                    realtime_cell(row, "bidp5"),
-                    realtime_cell(row, "bidp_rsqn5"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn4"),
-                    realtime_cell(row, "askp4"),
-                    realtime_cell(row, "bidp4"),
-                    realtime_cell(row, "bidp_rsqn4"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn3"),
-                    realtime_cell(row, "askp3"),
-                    realtime_cell(row, "bidp3"),
-                    realtime_cell(row, "bidp_rsqn3"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn2"),
-                    realtime_cell(row, "askp2"),
-                    realtime_cell(row, "bidp2"),
-                    realtime_cell(row, "bidp_rsqn2"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn1"),
-                    realtime_cell(row, "askp1"),
-                    realtime_cell(row, "bidp1"),
-                    realtime_cell(row, "bidp_rsqn1"),
-                ],
-            ];
             writeln!(
                 writer,
                 "{}",
-                render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows)
+                render::render_table(
+                    &["매도잔량", "매도호가", "매수호가", "매수잔량"],
+                    &realtime_orderbook_rows(row, 5),
+                )
             )?;
             writeln!(
                 writer,
@@ -3128,6 +3168,63 @@ fn write_ws_overtime_ask(
     if !wrote_any {
         writeln!(writer, "데이터가 없습니다.")?;
     }
+
+    Ok(())
+}
+
+fn write_ws_ccnl(writer: &mut dyn Write, payloads: &[kis_ws::RealtimePayload]) -> Result<()> {
+    let rows = payloads
+        .iter()
+        .flat_map(|payload| payload.rows.iter())
+        .map(|row| {
+            vec![
+                realtime_cell(row, "stck_cntg_hour"),
+                realtime_cell(row, "stck_prpr"),
+                format!(
+                    "{} {} ({}%)",
+                    price_sign(&realtime_cell(row, "prdy_vrss_sign")),
+                    realtime_cell(row, "prdy_vrss"),
+                    realtime_cell(row, "prdy_ctrt")
+                ),
+                realtime_cell(row, "cntg_vol"),
+                realtime_cell(row, "acml_vol"),
+                realtime_cell(row, "ccld_dvsn"),
+                realtime_cell(row, "cttr"),
+                realtime_cell(row, "askp1"),
+                realtime_cell(row, "bidp1"),
+                realtime_cell(row, "hour_cls_code"),
+                realtime_cell(row, "mrkt_trtm_cls_code"),
+                realtime_cell(row, "vi_stnd_prc"),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    if rows.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    writeln!(
+        writer,
+        "{}",
+        render::render_table(
+            &[
+                "시각",
+                "현재가",
+                "전일대비",
+                "체결량",
+                "누적거래량",
+                "체결구분",
+                "체결강도",
+                "매도1",
+                "매수1",
+                "시간구분",
+                "장구분",
+                "VI기준가",
+            ],
+            &rows,
+        )
+    )?;
 
     Ok(())
 }
@@ -3482,6 +3579,20 @@ fn realtime_cell(row: &kis_ws::RealtimeRow, field: &str) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
+fn realtime_orderbook_rows(row: &kis_ws::RealtimeRow, highest_level: usize) -> Vec<Vec<String>> {
+    (1..=highest_level)
+        .rev()
+        .map(|level| {
+            vec![
+                realtime_cell(row, &format!("askp_rsqn{level}")),
+                realtime_cell(row, &format!("askp{level}")),
+                realtime_cell(row, &format!("bidp{level}")),
+                realtime_cell(row, &format!("bidp_rsqn{level}")),
+            ]
+        })
+        .collect()
+}
+
 fn write_command_json<T>(writer: &mut dyn Write, command: &str, value: &T) -> Result<()>
 where
     T: Serialize,
@@ -3627,7 +3738,8 @@ mod tests {
         KisError, OverseasModifyMode, OverseasPlaceMode, build_overseas_screener_request,
         classify_error, config_output, display_or_dash, mask_app_key, order_output,
         overseas_modify_mode, overseas_place_mode, price_sign, reserve_order_output,
-        validation_error, write_command_json, write_json_error, write_json_raw, yn_to_mark,
+        validation_error, write_command_json, write_json_error, write_json_raw, write_ws_ask,
+        write_ws_ccnl, yn_to_mark,
     };
 
     #[test]
@@ -3915,5 +4027,68 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn writes_regular_ws_ask_output() {
+        let payloads = vec![kis_core::ws::RealtimePayload {
+            tr_id: "H0STASP0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("bsop_hour".to_string(), "090001".to_string()),
+                ("askp10".to_string(), "70100".to_string()),
+                ("askp_rsqn10".to_string(), "10".to_string()),
+                ("bidp10".to_string(), "69910".to_string()),
+                ("bidp_rsqn10".to_string(), "20".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+                ("askp_rsqn1".to_string(), "30".to_string()),
+                ("bidp1".to_string(), "70000".to_string()),
+                ("bidp_rsqn1".to_string(), "40".to_string()),
+                ("total_askp_rsqn".to_string(), "1000".to_string()),
+                ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                ("antc_cnpr".to_string(), "70000".to_string()),
+                ("stck_deal_cls_code".to_string(), "1".to_string()),
+            ])],
+        }];
+
+        let mut writer = Vec::new();
+        write_ws_ask(&mut writer, &payloads).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("70100"));
+        assert!(output.contains("70010"));
+        assert!(output.contains("매매구분: 1"));
+        assert!(output.contains("총매도잔량: 1000"));
+    }
+
+    #[test]
+    fn writes_regular_ws_ccnl_output() {
+        let payloads = vec![kis_core::ws::RealtimePayload {
+            tr_id: "H0STCNT0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("stck_cntg_hour".to_string(), "090001".to_string()),
+                ("stck_prpr".to_string(), "70000".to_string()),
+                ("prdy_vrss_sign".to_string(), "2".to_string()),
+                ("prdy_vrss".to_string(), "500".to_string()),
+                ("prdy_ctrt".to_string(), "0.72".to_string()),
+                ("cntg_vol".to_string(), "100".to_string()),
+                ("acml_vol".to_string(), "1000".to_string()),
+                ("ccld_dvsn".to_string(), "1".to_string()),
+                ("cttr".to_string(), "120.0".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+                ("bidp1".to_string(), "70000".to_string()),
+                ("hour_cls_code".to_string(), "0".to_string()),
+                ("mrkt_trtm_cls_code".to_string(), "1".to_string()),
+                ("vi_stnd_prc".to_string(), "68000".to_string()),
+            ])],
+        }];
+
+        let mut writer = Vec::new();
+        write_ws_ccnl(&mut writer, &payloads).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("체결구분"));
+        assert!(output.contains("VI기준가"));
+        assert!(output.contains("68000"));
+        assert!(output.contains("+ 500 (0.72%)"));
     }
 }

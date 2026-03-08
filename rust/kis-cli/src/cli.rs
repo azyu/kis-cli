@@ -880,6 +880,10 @@ pub struct WsArgs {
 pub enum WsCommand {
     #[command(about = "WebSocket approval key 발급")]
     Approval,
+    #[command(about = "국내 정규장 실시간호가 구독")]
+    Ask(WsStreamArgs),
+    #[command(about = "국내 정규장 실시간체결가 구독")]
+    Ccnl(WsStreamArgs),
     #[command(about = "국내 시간외 실시간호가 구독")]
     OvertimeAsk(WsStreamArgs),
     #[command(about = "국내 시간외 실시간체결가 구독")]
@@ -1439,6 +1443,58 @@ mod tests {
         assert_eq!(args.stock, "005930");
         assert_eq!(args.count, 2);
         assert_eq!(args.timeout_secs, 10);
+    }
+
+    #[test]
+    fn parses_ws_ask_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "ask",
+            "005930",
+            "--count",
+            "2",
+            "--timeout-secs",
+            "10",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert_eq!(args.stock, "005930");
+        assert_eq!(args.count, 2);
+        assert_eq!(args.timeout_secs, 10);
+    }
+
+    #[test]
+    fn parses_ws_ccnl_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "ccnl",
+            "005930",
+            "--count",
+            "3",
+            "--reconnects",
+            "1",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ccnl(args) = args.command else {
+            panic!("expected ws ccnl command");
+        };
+
+        assert_eq!(args.stock, "005930");
+        assert_eq!(args.count, 3);
+        assert_eq!(args.reconnects, 1);
     }
 
     #[test]
