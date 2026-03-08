@@ -211,6 +211,51 @@ fn parses_overseas_market_cap_command() {
 }
 
 #[test]
+fn parses_overseas_market_price_fluct_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "price-fluct", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::PriceFluct(args) = args.command else {
+        panic!("expected market price-fluct command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_market_new_highlow_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "new-highlow", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::NewHighlow(args) = args.command else {
+        panic!("expected market new-highlow command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_market_volume_surge_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume-surge", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::VolumeSurge(args) = args.command else {
+        panic!("expected market volume-surge command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
 fn parses_overseas_quote_ask_command() {
     let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
 

@@ -12,6 +12,12 @@ const PATH_TRADE_VOL: &str = "/uapi/overseas-stock/v1/ranking/trade-vol";
 const TR_ID_TRADE_VOL: &str = "HHDFS76310010";
 const PATH_MARKET_CAP: &str = "/uapi/overseas-stock/v1/ranking/market-cap";
 const TR_ID_MARKET_CAP: &str = "HHDFS76350100";
+const PATH_PRICE_FLUCT: &str = "/uapi/overseas-stock/v1/ranking/price-fluct";
+const TR_ID_PRICE_FLUCT: &str = "HHDFS76260000";
+const PATH_NEW_HIGHLOW: &str = "/uapi/overseas-stock/v1/ranking/new-highlow";
+const TR_ID_NEW_HIGHLOW: &str = "HHDFS76300000";
+const PATH_VOLUME_SURGE: &str = "/uapi/overseas-stock/v1/ranking/volume-surge";
+const TR_ID_VOLUME_SURGE: &str = "HHDFS76270000";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OverseasRankingResult {
@@ -60,6 +66,75 @@ where
         TR_ID_MARKET_CAP,
         &params,
         "overseas market cap rank",
+    )
+    .await
+}
+
+pub async fn get_price_fluct_rank<C>(client: &C, exchange: &str) -> Result<OverseasRankingResult>
+where
+    C: ApiClient + Sync,
+{
+    let exchange = normalize_exchange(exchange)?;
+    let params = HashMap::from([
+        ("EXCD".to_string(), exchange),
+        ("GUBN".to_string(), "0".to_string()),
+        ("MIXN".to_string(), "0".to_string()),
+        ("VOL_RANG".to_string(), "0".to_string()),
+        ("KEYB".to_string(), "".to_string()),
+        ("AUTH".to_string(), "".to_string()),
+    ]);
+    fetch_ranking(
+        client,
+        PATH_PRICE_FLUCT,
+        TR_ID_PRICE_FLUCT,
+        &params,
+        "overseas price fluct rank",
+    )
+    .await
+}
+
+pub async fn get_new_highlow_rank<C>(client: &C, exchange: &str) -> Result<OverseasRankingResult>
+where
+    C: ApiClient + Sync,
+{
+    let exchange = normalize_exchange(exchange)?;
+    let params = HashMap::from([
+        ("EXCD".to_string(), exchange),
+        ("MIXN".to_string(), "0".to_string()),
+        ("VOL_RANG".to_string(), "0".to_string()),
+        ("GUBN".to_string(), "1".to_string()),
+        ("GUBN2".to_string(), "1".to_string()),
+        ("KEYB".to_string(), "".to_string()),
+        ("AUTH".to_string(), "".to_string()),
+    ]);
+    fetch_ranking(
+        client,
+        PATH_NEW_HIGHLOW,
+        TR_ID_NEW_HIGHLOW,
+        &params,
+        "overseas new highlow rank",
+    )
+    .await
+}
+
+pub async fn get_volume_surge_rank<C>(client: &C, exchange: &str) -> Result<OverseasRankingResult>
+where
+    C: ApiClient + Sync,
+{
+    let exchange = normalize_exchange(exchange)?;
+    let params = HashMap::from([
+        ("EXCD".to_string(), exchange),
+        ("MIXN".to_string(), "0".to_string()),
+        ("VOL_RANG".to_string(), "0".to_string()),
+        ("KEYB".to_string(), "".to_string()),
+        ("AUTH".to_string(), "".to_string()),
+    ]);
+    fetch_ranking(
+        client,
+        PATH_VOLUME_SURGE,
+        TR_ID_VOLUME_SURGE,
+        &params,
+        "overseas volume surge rank",
     )
     .await
 }
@@ -275,6 +350,141 @@ mod tests {
         assert_eq!(calls[0].path, PATH_MARKET_CAP);
         assert_eq!(calls[0].tr_id, TR_ID_MARKET_CAP);
         assert_eq!(calls[0].params["EXCD"], "NYS");
+        assert_eq!(calls[0].params["VOL_RANG"], "0");
+        assert_eq!(calls[0].params["AUTH"], "");
+        assert_eq!(calls[0].params["KEYB"], "");
+    }
+
+    #[tokio::test]
+    async fn gets_price_fluct_rank() {
+        let client = MockClient {
+            responses: Arc::new(Mutex::new(vec![JsonResponse {
+                body: json!({
+                    "rt_cd": "0",
+                    "msg_cd": "MCA00000",
+                    "msg1": "정상처리",
+                    "output1": {
+                        "excd": "NAS",
+                        "crec": "20",
+                        "trec": "20"
+                    },
+                    "output2": [{
+                        "symb": "TSLA",
+                        "knam": "Tesla",
+                        "last": "182.00",
+                        "diff": "-8.00",
+                        "rate": "-4.21",
+                        "tvol": "40123456",
+                        "n_base": "190.00",
+                        "n_rate": "-4.21"
+                    }]
+                }),
+                tr_cont: None,
+            }])),
+            response_calls: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let result = get_price_fluct_rank(&client, "nas").await.unwrap();
+        assert_eq!(result.summary.len(), 1);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0]["symb"], "TSLA");
+
+        let calls = client.response_calls.lock().unwrap().clone();
+        assert_eq!(calls[0].path, PATH_PRICE_FLUCT);
+        assert_eq!(calls[0].tr_id, TR_ID_PRICE_FLUCT);
+        assert_eq!(calls[0].params["EXCD"], "NAS");
+        assert_eq!(calls[0].params["GUBN"], "0");
+        assert_eq!(calls[0].params["MIXN"], "0");
+        assert_eq!(calls[0].params["VOL_RANG"], "0");
+        assert_eq!(calls[0].params["AUTH"], "");
+        assert_eq!(calls[0].params["KEYB"], "");
+    }
+
+    #[tokio::test]
+    async fn gets_new_highlow_rank() {
+        let client = MockClient {
+            responses: Arc::new(Mutex::new(vec![JsonResponse {
+                body: json!({
+                    "rt_cd": "0",
+                    "msg_cd": "MCA00000",
+                    "msg1": "정상처리",
+                    "output1": {
+                        "excd": "NYS",
+                        "crec": "20",
+                        "trec": "20"
+                    },
+                    "output2": [{
+                        "rank": "1",
+                        "symb": "IBM",
+                        "name": "IBM",
+                        "last": "248.00",
+                        "rate": "1.32",
+                        "nhgh": "249.00",
+                        "nlow": "230.00",
+                        "tvol": "2345678"
+                    }]
+                }),
+                tr_cont: None,
+            }])),
+            response_calls: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let result = get_new_highlow_rank(&client, "nys").await.unwrap();
+        assert_eq!(result.summary.len(), 1);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0]["symb"], "IBM");
+
+        let calls = client.response_calls.lock().unwrap().clone();
+        assert_eq!(calls[0].path, PATH_NEW_HIGHLOW);
+        assert_eq!(calls[0].tr_id, TR_ID_NEW_HIGHLOW);
+        assert_eq!(calls[0].params["EXCD"], "NYS");
+        assert_eq!(calls[0].params["MIXN"], "0");
+        assert_eq!(calls[0].params["VOL_RANG"], "0");
+        assert_eq!(calls[0].params["GUBN"], "1");
+        assert_eq!(calls[0].params["GUBN2"], "1");
+        assert_eq!(calls[0].params["AUTH"], "");
+        assert_eq!(calls[0].params["KEYB"], "");
+    }
+
+    #[tokio::test]
+    async fn gets_volume_surge_rank() {
+        let client = MockClient {
+            responses: Arc::new(Mutex::new(vec![JsonResponse {
+                body: json!({
+                    "rt_cd": "0",
+                    "msg_cd": "MCA00000",
+                    "msg1": "정상처리",
+                    "output1": {
+                        "excd": "AMS",
+                        "crec": "20",
+                        "trec": "20"
+                    },
+                    "output2": [{
+                        "symb": "AMD",
+                        "knam": "Advanced Micro Devices",
+                        "last": "156.20",
+                        "rate": "3.45",
+                        "tvol": "89123456",
+                        "n_tvol": "20123456",
+                        "n_diff": "69000000",
+                        "n_rate": "342.87"
+                    }]
+                }),
+                tr_cont: None,
+            }])),
+            response_calls: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let result = get_volume_surge_rank(&client, "ams").await.unwrap();
+        assert_eq!(result.summary.len(), 1);
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0]["symb"], "AMD");
+
+        let calls = client.response_calls.lock().unwrap().clone();
+        assert_eq!(calls[0].path, PATH_VOLUME_SURGE);
+        assert_eq!(calls[0].tr_id, TR_ID_VOLUME_SURGE);
+        assert_eq!(calls[0].params["EXCD"], "AMS");
+        assert_eq!(calls[0].params["MIXN"], "0");
         assert_eq!(calls[0].params["VOL_RANG"], "0");
         assert_eq!(calls[0].params["AUTH"], "");
         assert_eq!(calls[0].params["KEYB"], "");

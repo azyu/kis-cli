@@ -51,6 +51,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 ## Decisions Log
 
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `ranking` 1차로 `trade-vol`과 `market-cap`만 구현했다. CLI 표면은 `kis market volume --exchange <quote-exchange>`와 `kis market cap --exchange <quote-exchange>`로 제한하고, 국내 `market volume`/`market holiday` 동작은 유지한다.
+- 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `ranking` 2차로 `price_fluct`, `new_highlow`, `volume_surge`를 구현했다. CLI 표면은 `kis market price-fluct|new-highlow|volume-surge --exchange <quote-exchange>`로 제한하고, 세 endpoint의 추가 필터는 기본값(`MIXN=0`, `VOL_RANG=0`, `GUBN/GUBN2` 기본 조합)으로 고정해 계약을 최소화한다.
 - 2026-03-08: `ranking` 후속 후보(`price_fluct`, `new_highlow`, `volume_surge` 등)는 이번 단계에서 제외한다. 현재 우선순위는 계약이 분리된 `inquire_search`보다 ranking 나머지 endpoints를 먼저 검토하는 것이다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `search/info` 1차로 `search_info`만 구현했다. CLI 표면은 국내 `info search` 의미를 유지하기 위해 별도 `kis info detail <symbol> --exchange <quote-exchange>`로 추가했다.
 - 2026-03-08: 해외 `inquire_search`는 조건검색 API라서 국내 `info search`의 키워드 검색 의미와 다르다. 다수 필터 플래그를 요구해 계약이 커지므로 이번 단계에서는 제외하고 후속 슬라이스로 남긴다.

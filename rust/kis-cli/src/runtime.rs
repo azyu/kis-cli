@@ -2327,6 +2327,147 @@ async fn run_market(
                 &[("요약", summary)],
             )?;
         }
+        cli::MarketCommand::PriceFluct(args) => {
+            let result =
+                overseas_market::get_price_fluct_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["diff"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["n_base"]),
+                        json_cell_alias(row, &["n_rate"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "대비",
+                        "등락율",
+                        "거래량",
+                        "기준가",
+                        "기준대비율",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::NewHighlow(args) => {
+            let result =
+                overseas_market::get_new_highlow_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["nhgh"]),
+                        json_cell_alias(row, &["nlow"]),
+                        json_cell_alias(row, &["tvol"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "신고가",
+                        "신저가",
+                        "거래량",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::VolumeSurge(args) => {
+            let result =
+                overseas_market::get_volume_surge_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["n_tvol"]),
+                        json_cell_alias(row, &["n_diff"]),
+                        json_cell_alias(row, &["trat", "n_rate"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "거래량",
+                        "기준거래량",
+                        "증가량",
+                        "증가율",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
         cli::MarketCommand::Holiday(args) => {
             let items = market::get_holidays(&runtime.client, &args.date).await?;
             if runtime.output_json {

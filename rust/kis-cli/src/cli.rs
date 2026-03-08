@@ -684,6 +684,12 @@ pub enum MarketCommand {
     Volume(MarketVolumeArgs),
     #[command(about = "해외 시가총액 순위 조회")]
     Cap(OverseasMarketArgs),
+    #[command(about = "해외 급등락 순위 조회")]
+    PriceFluct(OverseasMarketArgs),
+    #[command(about = "해외 신고가/신저가 순위 조회")]
+    NewHighlow(OverseasMarketArgs),
+    #[command(about = "해외 거래량 급증 순위 조회")]
+    VolumeSurge(OverseasMarketArgs),
     #[command(about = "휴장일 조회")]
     Holiday(HolidayArgs),
 }
@@ -1501,6 +1507,48 @@ mod tests {
         };
         let MarketCommand::Cap(args) = args.command else {
             panic!("expected market cap command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_price_fluct_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "price-fluct", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::PriceFluct(args) = args.command else {
+            panic!("expected market price-fluct command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_new_highlow_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "new-highlow", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::NewHighlow(args) = args.command else {
+            panic!("expected market new-highlow command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_volume_surge_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "volume-surge", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::VolumeSurge(args) = args.command else {
+            panic!("expected market volume-surge command");
         };
 
         assert_eq!(args.exchange, "NAS");
