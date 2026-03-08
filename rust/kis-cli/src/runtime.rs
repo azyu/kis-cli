@@ -14,8 +14,8 @@ use kis_core::domestic::{balance, chart, finance, info, market, order, overtime,
 use kis_core::error::KisError;
 use kis_core::overseas::{
     balance as overseas_balance, chart as overseas_chart, exchange::OrderExchange,
-    info as overseas_info, order as overseas_order, price as overseas_price,
-    quote as overseas_quote,
+    info as overseas_info, market as overseas_market, order as overseas_order,
+    price as overseas_price, quote as overseas_quote,
 };
 use kis_core::ws as kis_ws;
 use serde::Serialize;
@@ -2193,7 +2193,58 @@ async fn run_market(
     writer: &mut dyn Write,
 ) -> Result<()> {
     match args.command {
-        cli::MarketCommand::Volume => {
+        cli::MarketCommand::Volume(args) => {
+            if let Some(exchange) = args.exchange {
+                let result =
+                    overseas_market::get_trade_volume_rank(&runtime.client, &exchange).await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &result);
+                }
+
+                let value = serde_json::to_value(&result)?;
+                let rows = json_array(&value, "items")
+                    .iter()
+                    .filter_map(Value::as_object)
+                    .map(|row| {
+                        vec![
+                            json_cell_alias(row, &["rank"]),
+                            json_cell_alias(row, &["symb"]),
+                            json_cell_alias(row, &["name"]),
+                            json_cell_alias(row, &["last"]),
+                            json_cell_alias(row, &["diff"]),
+                            json_cell_alias(row, &["rate"]),
+                            json_cell_alias(row, &["tvol"]),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let summary = json_first_pairs(
+                    &value,
+                    "summary",
+                    &[
+                        ("거래소", "excd"),
+                        ("현재조회", "crec"),
+                        ("전체조회", "trec"),
+                    ],
+                );
+                write_value_sections(
+                    writer,
+                    &[(
+                        &[
+                            "순위",
+                            "종목코드",
+                            "종목명",
+                            "현재가",
+                            "대비",
+                            "등락율",
+                            "거래량",
+                        ],
+                        rows,
+                    )],
+                    &[("요약", summary)],
+                )?;
+                return Ok(());
+            }
+
             let items = market::get_volume_rank(&runtime.client).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &items);
@@ -2226,6 +2277,55 @@ async fn run_market(
                 &rows,
             );
             writeln!(writer, "{table}")?;
+        }
+        cli::MarketCommand::Cap(args) => {
+            let result =
+                overseas_market::get_market_cap_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["tomv", "mcap"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소", "excd"),
+                    ("현재조회", "crec"),
+                    ("전체조회", "trec"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "거래량",
+                        "시가총액",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
         }
         cli::MarketCommand::Holiday(args) => {
             let items = market::get_holidays(&runtime.client, &args.date).await?;
@@ -2943,6 +3043,21 @@ fn json_array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
 
 fn json_cell(row: &serde_json::Map<String, Value>, field: &str) -> String {
     row.get(field)
+        .map(|value| match value {
+            Value::Null => "-".to_string(),
+            Value::String(value) if value.is_empty() => "-".to_string(),
+            Value::String(value) => value.to_string(),
+            Value::Number(value) => value.to_string(),
+            Value::Bool(value) => value.to_string(),
+            _ => value.to_string(),
+        })
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn json_cell_alias(row: &serde_json::Map<String, Value>, fields: &[&str]) -> String {
+    fields
+        .iter()
+        .find_map(|field| row.get(*field))
         .map(|value| match value {
             Value::Null => "-".to_string(),
             Value::String(value) if value.is_empty() => "-".to_string(),

@@ -681,9 +681,32 @@ pub struct MarketArgs {
 #[derive(Debug, Subcommand)]
 pub enum MarketCommand {
     #[command(about = "거래량 순위 조회")]
-    Volume,
+    Volume(MarketVolumeArgs),
+    #[command(about = "해외 시가총액 순위 조회")]
+    Cap(OverseasMarketArgs),
     #[command(about = "휴장일 조회")]
     Holiday(HolidayArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct MarketVolumeArgs {
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasMarketArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
 }
 
 #[derive(Debug, Args)]
@@ -1442,6 +1465,45 @@ mod tests {
         };
 
         assert_eq!(args.date, "20260306");
+    }
+
+    #[test]
+    fn parses_domestic_market_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "volume"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Volume(args) = args.command else {
+            panic!("expected market volume command");
+        };
+
+        assert_eq!(args.exchange, None);
+    }
+
+    #[test]
+    fn parses_overseas_market_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "volume", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Volume(args) = args.command else {
+            panic!("expected market volume command");
+        };
+
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
+    fn parses_overseas_market_cap_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "cap", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Cap(args) = args.command else {
+            panic!("expected market cap command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
     }
 
     #[test]

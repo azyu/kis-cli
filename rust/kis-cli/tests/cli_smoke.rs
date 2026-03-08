@@ -166,6 +166,51 @@ fn parses_overseas_info_detail_command() {
 }
 
 #[test]
+fn parses_overseas_market_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Volume(args) = args.command else {
+        panic!("expected market volume command");
+    };
+
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+}
+
+#[test]
+fn parses_domestic_market_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Volume(args) = args.command else {
+        panic!("expected market volume command");
+    };
+
+    assert_eq!(args.exchange, None);
+}
+
+#[test]
+fn parses_overseas_market_cap_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "cap", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Cap(args) = args.command else {
+        panic!("expected market cap command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
 fn parses_overseas_quote_ask_command() {
     let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
 
