@@ -109,6 +109,12 @@ struct ConfigOutput {
 }
 
 #[derive(Debug, Serialize)]
+struct WsSymbolPayloads {
+    stock: String,
+    payloads: Vec<kis_ws::RealtimePayload>,
+}
+
+#[derive(Debug, Serialize)]
 struct OrderOutput {
     side: &'static str,
     order_org_no: String,
@@ -3028,65 +3034,163 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
             writeln!(writer, "{output}")?;
         }
         cli::WsCommand::Ask(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_asking_price_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_asking_price_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_ask(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_asking_price_spec(),
+                    &args,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_ask)?;
             }
-            write_ws_ask(writer, &payloads)?;
         }
         cli::WsCommand::Ccnl(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_ccnl_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_ccnl_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_ccnl(writer, &payloads)?;
+            } else {
+                let payloads =
+                    collect_ws_symbol_payloads(runtime, kis_ws::domestic_ccnl_spec(), &args)
+                        .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_ccnl)?;
             }
-            write_ws_ccnl(writer, &payloads)?;
         }
         cli::WsCommand::OvertimeAsk(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_overtime_asking_price_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_overtime_asking_price_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_overtime_ask(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_overtime_asking_price_spec(),
+                    &args,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_overtime_ask)?;
             }
-            write_ws_overtime_ask(writer, &payloads)?;
         }
         cli::WsCommand::OvertimeCcnl(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_overtime_ccnl_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_overtime_ccnl_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_overtime_ccnl(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_overtime_ccnl_spec(),
+                    &args,
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_overtime_ccnl)?;
             }
-            write_ws_overtime_ccnl(writer, &payloads)?;
         }
+    }
+
+    Ok(())
+}
+
+async fn collect_ws_symbol_payloads(
+    runtime: &Runtime,
+    spec: kis_ws::RealtimeSpec,
+    args: &cli::WsStreamArgs,
+) -> Result<Vec<WsSymbolPayloads>> {
+    let approval = kis_ws::fetch_approval_key(&runtime.config).await?;
+    let mut streams = Vec::with_capacity(args.stocks.len());
+
+    for stock in &args.stocks {
+        let payloads = kis_ws::collect_realtime_messages_with_approval_key(
+            &runtime.config,
+            &approval.approval_key,
+            spec,
+            stock,
+            args.count,
+            Duration::from_secs(args.timeout_secs),
+            args.reconnects,
+        )
+        .await?;
+        streams.push(WsSymbolPayloads {
+            stock: stock.clone(),
+            payloads,
+        });
+    }
+
+    Ok(streams)
+}
+
+fn write_ws_symbol_payloads(
+    writer: &mut dyn Write,
+    streams: &[WsSymbolPayloads],
+    write_payloads: fn(&mut dyn Write, &[kis_ws::RealtimePayload]) -> Result<()>,
+) -> Result<()> {
+    if streams.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    for (index, stream) in streams.iter().enumerate() {
+        if index > 0 {
+            writeln!(writer)?;
+        }
+        writeln!(writer, "종목: {}", stream.stock)?;
+        write_payloads(writer, &stream.payloads)?;
     }
 
     Ok(())
@@ -3735,11 +3839,11 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        KisError, OverseasModifyMode, OverseasPlaceMode, build_overseas_screener_request,
-        classify_error, config_output, display_or_dash, mask_app_key, order_output,
-        overseas_modify_mode, overseas_place_mode, price_sign, reserve_order_output,
-        validation_error, write_command_json, write_json_error, write_json_raw, write_ws_ask,
-        write_ws_ccnl, yn_to_mark,
+        KisError, OverseasModifyMode, OverseasPlaceMode, WsSymbolPayloads,
+        build_overseas_screener_request, classify_error, config_output, display_or_dash,
+        mask_app_key, order_output, overseas_modify_mode, overseas_place_mode, price_sign,
+        reserve_order_output, validation_error, write_command_json, write_json_error,
+        write_json_raw, write_ws_ask, write_ws_ccnl, write_ws_symbol_payloads, yn_to_mark,
     };
 
     #[test]
@@ -4090,5 +4194,53 @@ mod tests {
         assert!(output.contains("VI기준가"));
         assert!(output.contains("68000"));
         assert!(output.contains("+ 500 (0.72%)"));
+    }
+
+    #[test]
+    fn writes_multi_ws_symbol_output_with_headers() {
+        let streams = vec![
+            WsSymbolPayloads {
+                stock: "005930".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090001".to_string()),
+                        ("askp1".to_string(), "70010".to_string()),
+                        ("askp_rsqn1".to_string(), "30".to_string()),
+                        ("bidp1".to_string(), "70000".to_string()),
+                        ("bidp_rsqn1".to_string(), "40".to_string()),
+                        ("total_askp_rsqn".to_string(), "1000".to_string()),
+                        ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                        ("antc_cnpr".to_string(), "70000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+            WsSymbolPayloads {
+                stock: "000660".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090002".to_string()),
+                        ("askp1".to_string(), "180100".to_string()),
+                        ("askp_rsqn1".to_string(), "10".to_string()),
+                        ("bidp1".to_string(), "180000".to_string()),
+                        ("bidp_rsqn1".to_string(), "20".to_string()),
+                        ("total_askp_rsqn".to_string(), "300".to_string()),
+                        ("total_bidp_rsqn".to_string(), "400".to_string()),
+                        ("antc_cnpr".to_string(), "180000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+        ];
+
+        let mut writer = Vec::new();
+        write_ws_symbol_payloads(&mut writer, &streams, write_ws_ask).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("종목: 005930"));
+        assert!(output.contains("종목: 000660"));
+        assert!(output.contains("180100"));
     }
 }

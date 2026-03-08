@@ -892,10 +892,10 @@ pub enum WsCommand {
 
 #[derive(Debug, Args)]
 pub struct WsStreamArgs {
-    #[arg(help = "종목코드")]
-    pub stock: String,
+    #[arg(num_args = 1.., help = "종목코드 (여러 개 가능)")]
+    pub stocks: Vec<String>,
 
-    #[arg(long, default_value_t = 1, help = "수집할 메시지 개수")]
+    #[arg(long, default_value_t = 1, help = "종목별 수집할 메시지 개수")]
     pub count: usize,
 
     #[arg(
@@ -1440,7 +1440,7 @@ mod tests {
             panic!("expected ws overtime-ask command");
         };
 
-        assert_eq!(args.stock, "005930");
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
         assert_eq!(args.count, 2);
         assert_eq!(args.timeout_secs, 10);
     }
@@ -1466,7 +1466,7 @@ mod tests {
             panic!("expected ws ask command");
         };
 
-        assert_eq!(args.stock, "005930");
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
         assert_eq!(args.count, 2);
         assert_eq!(args.timeout_secs, 10);
     }
@@ -1492,8 +1492,54 @@ mod tests {
             panic!("expected ws ccnl command");
         };
 
-        assert_eq!(args.stock, "005930");
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
         assert_eq!(args.count, 3);
+        assert_eq!(args.reconnects, 1);
+    }
+
+    #[test]
+    fn parses_ws_multi_ask_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "ws", "ask", "005930", "000660", "--count", "2"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert_eq!(
+            args.stocks,
+            vec!["005930".to_string(), "000660".to_string()]
+        );
+        assert_eq!(args.count, 2);
+    }
+
+    #[test]
+    fn parses_ws_multi_overtime_ccnl_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "overtime-ccnl",
+            "005930",
+            "000660",
+            "--reconnects",
+            "1",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::OvertimeCcnl(args) = args.command else {
+            panic!("expected ws overtime-ccnl command");
+        };
+
+        assert_eq!(
+            args.stocks,
+            vec!["005930".to_string(), "000660".to_string()]
+        );
         assert_eq!(args.reconnects, 1);
     }
 

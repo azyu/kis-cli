@@ -134,10 +134,14 @@ kis balance reserve-orders --region us --start 20260301 --end 20260307 --exchang
 ```bash
 kis ws approval
 kis ws ask 005930 --count 1
+kis ws ask 005930 000660 --count 1
 kis ws ccnl 005930 --count 3
 kis ws overtime-ask 005930 --count 1
+kis ws overtime-ccnl 005930 000660 --count 1
 kis ws overtime-ccnl 005930 --count 3
 ```
+
+여러 종목을 넘기면 같은 실시간 spec 안에서 종목별로 순차 수집하며, `--count`는 종목별 메시지 개수입니다.
 
 ### 재무 / 기업정보 / 시장현황
 

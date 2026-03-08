@@ -531,7 +531,7 @@ fn parses_ws_ask_command() {
         panic!("expected ws ask command");
     };
 
-    assert_eq!(args.stock, "005930");
+    assert_eq!(args.stocks, vec!["005930".to_string()]);
     assert_eq!(args.count, 2);
 }
 
@@ -547,8 +547,28 @@ fn parses_ws_ccnl_command() {
         panic!("expected ws ccnl command");
     };
 
-    assert_eq!(args.stock, "005930");
+    assert_eq!(args.stocks, vec!["005930".to_string()]);
     assert_eq!(args.reconnects, 1);
+}
+
+#[test]
+fn parses_ws_multi_ask_command() {
+    let cli =
+        Cli::try_parse_from(["kis", "ws", "ask", "005930", "000660", "--count", "2"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ask(args) = args.command else {
+        panic!("expected ws ask command");
+    };
+
+    assert_eq!(
+        args.stocks,
+        vec!["005930".to_string(), "000660".to_string()]
+    );
+    assert_eq!(args.count, 2);
 }
 
 #[test]
