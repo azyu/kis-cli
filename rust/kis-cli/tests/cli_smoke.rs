@@ -75,7 +75,10 @@ fn parses_quote_overtime_ask_command() {
         panic!("expected quote command");
     };
 
-    assert!(matches!(args.command, kis_cli::cli::QuoteCommand::OvertimeAsk(_)));
+    assert!(matches!(
+        args.command,
+        kis_cli::cli::QuoteCommand::OvertimeAsk(_)
+    ));
 }
 
 #[test]

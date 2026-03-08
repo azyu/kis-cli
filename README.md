@@ -220,6 +220,7 @@ kis config --quiet
 ```text
 kis-cli/
 ├── docs/
+│   ├── development-checks.md # 표준 개발 체크와 Copy Checklist
 │   ├── SPEC.md           # Rust 2-crate 기술 명세
 │   └── reference.md      # KIS API 레퍼런스
 ├── rust/
@@ -228,6 +229,22 @@ kis-cli/
 ```
 
 크레이트 경계와 모듈 책임은 `docs/SPEC.md`를 기준으로 유지합니다.
+
+## 개발 체크
+
+로컬 훅과 CI는 루트 `Makefile`의 동일한 진입점을 사용합니다. 자세한 운영 규칙과 다른 저장소로 옮길 때의 체크리스트는 `docs/development-checks.md`를 참고하세요.
+
+```bash
+make hooks-install
+make fmt
+make fmt-check
+make lint
+make test
+```
+
+- 로컬 워크플로우는 POSIX shell + `make` 기준입니다.
+- Windows에서는 Git Bash 또는 WSL 사용을 권장합니다.
+- `make hooks-install`은 repo-local Git hooks 경로를 `.githooks`로 설정합니다.
 
 ## 보안
 
@@ -238,7 +255,12 @@ kis-cli/
 ## 테스트
 
 ```bash
-cargo test --manifest-path rust/Cargo.toml
+make test
+```
+
+crate 단위로 좁혀서 확인할 때는 기존 `cargo` 명령을 그대로 사용할 수 있습니다.
+
+```bash
 cargo test --manifest-path rust/Cargo.toml -p kis-core
 cargo test --manifest-path rust/Cargo.toml -p kis-cli
 ```

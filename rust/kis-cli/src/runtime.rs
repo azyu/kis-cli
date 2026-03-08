@@ -1,10 +1,10 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{
     error::Error as StdError,
     fmt::{Display, Formatter},
 };
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use kis_cli::{cli, render};
@@ -174,10 +174,7 @@ fn resolve_config_path(cli_config: Option<&Path>) -> Result<PathBuf> {
     }
 
     let home = dirs::home_dir().context("determining home directory")?;
-    Ok(PathBuf::from(home)
-        .join(".config")
-        .join("kis")
-        .join("config.yaml"))
+    Ok(home.join(".config").join("kis").join("config.yaml"))
 }
 
 async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Write) -> Result<()> {
@@ -291,10 +288,7 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
 
             let output = render::render_pairs(&[
                 ("종목명", display_or_dash(&item.bstp_kor_isnm)),
-                (
-                    "현재가",
-                    display_or_dash(&item.ovtm_untp_prpr),
-                ),
+                ("현재가", display_or_dash(&item.ovtm_untp_prpr)),
                 (
                     "전일대비",
                     format!(
@@ -317,7 +311,8 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
             writeln!(writer, "{output}")?;
         }
         cli::QuoteCommand::OvertimeAsk(args) => {
-            let ask = overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
+            let ask =
+                overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &ask);
             }
@@ -1613,9 +1608,18 @@ async fn run_balance(
                     ("재사용가능", display_or_dash(&result.sll_ruse_psbl_amt)),
                     ("해외주문가능", display_or_dash(&result.ovrs_ord_psbl_amt)),
                     ("주문가능수량", display_or_dash(&result.ord_psbl_qty)),
-                    ("최대주문가능수량", display_or_dash(&result.max_ord_psbl_qty)),
-                    ("환전후가능금액", display_or_dash(&result.echm_af_ord_psbl_amt)),
-                    ("환전후가능수량", display_or_dash(&result.echm_af_ord_psbl_qty)),
+                    (
+                        "최대주문가능수량",
+                        display_or_dash(&result.max_ord_psbl_qty),
+                    ),
+                    (
+                        "환전후가능금액",
+                        display_or_dash(&result.echm_af_ord_psbl_amt),
+                    ),
+                    (
+                        "환전후가능수량",
+                        display_or_dash(&result.echm_af_ord_psbl_qty),
+                    ),
                     ("환율", display_or_dash(&result.exrt)),
                 ]);
                 writeln!(writer, "{output}")?;

@@ -67,6 +67,7 @@
 - [x] GitHub Actions 추가 (`ci`, `release-build`) — Agent: Main
 - [x] GitHub release target 확대 (`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`) — Agent: Main
 - [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
+- [x] 개발 체크 표준화 (`rust-toolchain.toml`, `Makefile`, repo hooks, CI/문서 동기화) — Agent: Main
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain
