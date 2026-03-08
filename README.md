@@ -149,6 +149,7 @@ kis info news 005930
 kis info opinion 005930
 kis info search 삼성
 kis info detail AAPL --exchange NAS
+kis info screener --exchange NAS --price-start 160 --price-end 170
 
 kis market volume
 kis market volume --exchange NAS
@@ -204,7 +205,7 @@ kis config --quiet
 - `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결, 매수가능금액, 기간손익/기간거래, 지정가체결, 예약주문 조회(us/asia)
 - `market`: 국내 거래량 순위/휴장일, 해외 거래량 순위/시가총액 순위/급등락 순위/신고가·신저가 순위/거래량 급증 순위
 - `finance`: 재무상태표, 손익계산서, 재무비율
-- `info`: 국내 배당정보/뉴스/투자의견/종목검색, 해외 상품기본정보
+- `info`: 국내 배당정보/뉴스/투자의견/종목검색, 해외 상품기본정보/조건검색
 - `ws`: approval key 발급, 국내 시간외 실시간 호가/체결
 - `config`: 현재 설정 출력
 
@@ -222,7 +223,7 @@ kis config --quiet
 
 ## 거래소 코드 주의
 
-- 시세 조회(`price`, `quote ask`, `quote ccnl`, `chart daily`, `chart time`, `info detail`, `market volume --exchange`, `market cap`, `market price-fluct`, `market new-highlow`, `market volume-surge`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
+- 시세 조회(`price`, `quote ask`, `quote ccnl`, `chart daily`, `chart time`, `info detail`, `info screener`, `market volume --exchange`, `market cap`, `market price-fluct`, `market new-highlow`, `market volume-surge`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
 - 해외 주문/잔고는 주문용 거래소 코드(`NASD`, `NYSE`, `AMEX`, `SEHK`, `SHAA`, `SZAA`, `TKSE`, `HASE`, `VNSE`)를 사용합니다.
 - `--daytime`은 미국 거래소(`NASD`, `NYSE`, `AMEX`) + `real` 환경에서만 허용됩니다.
 

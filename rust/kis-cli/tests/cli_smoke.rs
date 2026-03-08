@@ -166,6 +166,34 @@ fn parses_overseas_info_detail_command() {
 }
 
 #[test]
+fn parses_overseas_info_screener_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "info",
+        "screener",
+        "--exchange",
+        "NAS",
+        "--price-start",
+        "160",
+        "--price-end",
+        "170",
+    ])
+    .unwrap();
+
+    let Command::Info(args) = cli.command else {
+        panic!("expected info command");
+    };
+
+    let kis_cli::cli::InfoCommand::Screener(args) = args.command else {
+        panic!("expected info screener command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+    assert_eq!(args.price_start.as_deref(), Some("160"));
+    assert_eq!(args.price_end.as_deref(), Some("170"));
+}
+
+#[test]
 fn parses_overseas_market_volume_command() {
     let cli = Cli::try_parse_from(["kis", "market", "volume", "--exchange", "NAS"]).unwrap();
 

@@ -8,11 +8,10 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Priorities
 
-1. 해외주식 시세/시장정보 2차 잔여분 (chart/search/ranking 계열)
-2. E2E 통합 테스트 (모의투자) 및 live smoke 기준 정리
-3. `ratatui` 필요성 재평가 (`kis tui`는 후속)
-4. WebSocket 표면 확대 여부 재평가 (정규장 시세/체결, 다중 구독 UX)
-5. agent-friendly CLI 계약 후속 정리 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run` 이후 문서 동기화)
+1. E2E 통합 테스트 (모의투자) 및 live smoke 기준 정리
+2. `ratatui` 필요성 재평가 (`kis tui`는 후속)
+3. WebSocket 표면 확대 여부 재평가 (정규장 시세/체결, 다중 구독 UX)
+4. agent-friendly CLI 계약 후속 정리 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run` 이후 문서 동기화)
 
 ## Agent Assignment
 
@@ -55,6 +54,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: `ranking` 후속 후보(`price_fluct`, `new_highlow`, `volume_surge` 등)는 이번 단계에서 제외한다. 현재 우선순위는 계약이 분리된 `inquire_search`보다 ranking 나머지 endpoints를 먼저 검토하는 것이다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `search/info` 1차로 `search_info`만 구현했다. CLI 표면은 국내 `info search` 의미를 유지하기 위해 별도 `kis info detail <symbol> --exchange <quote-exchange>`로 추가했다.
 - 2026-03-08: 해외 `inquire_search`는 조건검색 API라서 국내 `info search`의 키워드 검색 의미와 다르다. 다수 필터 플래그를 요구해 계약이 커지므로 이번 단계에서는 제외하고 후속 슬라이스로 남긴다.
+- 2026-03-08: 해외 `inquire_search`를 별도 `kis info screener --exchange <quote-exchange> ...` 표면으로 구현했다. `info search`는 국내 키워드 검색 의미를 유지하고, screener는 API가 제공하는 8개 범위 필터만 `--*-start/--*-end` 쌍으로 노출한다.
+- 2026-03-08: 해외 시세/시장정보 2차 잔여분(`chart`, `search_info`, `inquire_search`, `ranking`)은 이번 단계로 모두 완료됐다. 다음 우선순위는 해외 market-info가 아니라 E2E/live smoke와 나머지 비시세 마일스톤이다.
 - 2026-03-08: 다음 `ranking` 슬라이스는 기존 `market` 표면에 자연스럽게 들어가는 최소 범위로 제한한다. 우선 후보는 `trade-vol`과 `market-cap`이며, `price_fluct`/`new_highlow`/`volume_surge`는 후속으로 남긴다.
 - 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `chart` 슬라이스를 완료했다. `kis chart daily|time ... --exchange <quote-exchange>`가 해외 종목 차트로 라우팅된다. 이번 단계는 해외 종목 일별/분별 차트만 포함하며, 해외 시간차트는 기본 1페이지(`NREC=120`) 조회로 제한한다.
 - 2026-03-08: 남은 해외 시세/시장정보 2차 잔여분은 `chart -> search/info -> ranking` 순서의 단계형 슬라이스로 진행한다. `chart` 계열을 완료했고 다음 단계는 `search/info`다. 리더 에이전트가 구현을 소유하고 오케스트레이터가 범위/검증/인수인계를 관리한다.

@@ -1456,6 +1456,89 @@ fn validation_error(message: impl Into<String>) -> anyhow::Error {
     ValidationError::new(message).into()
 }
 
+fn build_overseas_screener_request(
+    args: cli::OverseasScreenerArgs,
+) -> Result<overseas_info::OverseasScreenerRequest> {
+    let price = screener_range(
+        "--price-start",
+        args.price_start,
+        "--price-end",
+        args.price_end,
+    )?;
+    let rate = screener_range("--rate-start", args.rate_start, "--rate-end", args.rate_end)?;
+    let market_cap = screener_range(
+        "--market-cap-start",
+        args.market_cap_start,
+        "--market-cap-end",
+        args.market_cap_end,
+    )?;
+    let shares = screener_range(
+        "--shares-start",
+        args.shares_start,
+        "--shares-end",
+        args.shares_end,
+    )?;
+    let volume = screener_range(
+        "--volume-start",
+        args.volume_start,
+        "--volume-end",
+        args.volume_end,
+    )?;
+    let amount = screener_range(
+        "--amount-start",
+        args.amount_start,
+        "--amount-end",
+        args.amount_end,
+    )?;
+    let eps = screener_range("--eps-start", args.eps_start, "--eps-end", args.eps_end)?;
+    let per = screener_range("--per-start", args.per_start, "--per-end", args.per_end)?;
+
+    if [
+        price.as_ref(),
+        rate.as_ref(),
+        market_cap.as_ref(),
+        shares.as_ref(),
+        volume.as_ref(),
+        amount.as_ref(),
+        eps.as_ref(),
+        per.as_ref(),
+    ]
+    .iter()
+    .all(Option::is_none)
+    {
+        return Err(validation_error(
+            "info screener requires at least one filter range",
+        ));
+    }
+
+    Ok(overseas_info::OverseasScreenerRequest {
+        exchange: args.exchange,
+        price,
+        rate,
+        market_cap,
+        shares,
+        volume,
+        amount,
+        eps,
+        per,
+    })
+}
+
+fn screener_range(
+    start_flag: &str,
+    start: Option<String>,
+    end_flag: &str,
+    end: Option<String>,
+) -> Result<Option<overseas_info::RangeFilter>> {
+    match (start, end) {
+        (Some(start), Some(end)) => Ok(Some(overseas_info::RangeFilter { start, end })),
+        (None, None) => Ok(None),
+        _ => Err(validation_error(format!(
+            "{start_flag} and {end_flag} must be used together"
+        ))),
+    }
+}
+
 fn normalize_order_exchange(exchange: String) -> Result<String> {
     Ok(parse_order_exchange(&exchange)?.code().to_string())
 }
@@ -2750,6 +2833,62 @@ async fn run_info(runtime: &Runtime, args: cli::InfoArgs, writer: &mut dyn Write
             ]);
             writeln!(writer, "{output}")?;
         }
+        cli::InfoCommand::Screener(args) => {
+            let request = build_overseas_screener_request(*args)?;
+            let result = overseas_info::inquire_search(&runtime.client, &request).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["diff"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["valx"]),
+                        json_cell_alias(row, &["eps"]),
+                        json_cell_alias(row, &["per"]),
+                        json_cell_alias(row, &["e_ordyn"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소", "excd"),
+                    ("현재조회", "crec"),
+                    ("전체조회", "trec"),
+                    ("레코드", "nrec"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "현재가",
+                        "대비",
+                        "등락율",
+                        "거래량",
+                        "시가총액",
+                        "EPS",
+                        "PER",
+                        "매매가능",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
     }
 
     Ok(())
@@ -3364,10 +3503,10 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        KisError, OverseasModifyMode, OverseasPlaceMode, classify_error, config_output,
-        display_or_dash, mask_app_key, order_output, overseas_modify_mode, overseas_place_mode,
-        price_sign, reserve_order_output, validation_error, write_command_json, write_json_error,
-        write_json_raw, yn_to_mark,
+        KisError, OverseasModifyMode, OverseasPlaceMode, build_overseas_screener_request,
+        classify_error, config_output, display_or_dash, mask_app_key, order_output,
+        overseas_modify_mode, overseas_place_mode, price_sign, reserve_order_output,
+        validation_error, write_command_json, write_json_error, write_json_raw, yn_to_mark,
     };
 
     #[test]
@@ -3514,6 +3653,87 @@ mod tests {
             overseas_modify_mode(Some("AMEX"), true, false).unwrap(),
             Some(OverseasModifyMode::Daytime)
         );
+    }
+
+    #[test]
+    fn builds_overseas_screener_request() {
+        let request = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: Some("160".to_string()),
+            price_end: Some("170".to_string()),
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: Some("1000000".to_string()),
+            volume_end: Some("90000000".to_string()),
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap();
+
+        assert_eq!(request.exchange, "NAS");
+        assert_eq!(request.price.unwrap().start, "160");
+        assert_eq!(request.volume.unwrap().end, "90000000");
+    }
+
+    #[test]
+    fn rejects_partial_overseas_screener_range() {
+        let err = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: Some("160".to_string()),
+            price_end: None,
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: None,
+            volume_end: None,
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("--price-start"));
+        assert!(err.to_string().contains("--price-end"));
+    }
+
+    #[test]
+    fn rejects_empty_overseas_screener_request() {
+        let err = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: None,
+            price_end: None,
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: None,
+            volume_end: None,
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("at least one filter range"));
     }
 
     #[test]

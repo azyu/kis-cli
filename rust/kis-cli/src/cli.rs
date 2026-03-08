@@ -764,6 +764,8 @@ pub enum InfoCommand {
     Search(SearchArgs),
     #[command(about = "해외주식 상품기본정보 조회")]
     Detail(OverseasInfoDetailArgs),
+    #[command(about = "해외주식 조건검색")]
+    Screener(Box<OverseasScreenerArgs>),
 }
 
 #[derive(Debug, Args)]
@@ -803,6 +805,65 @@ pub struct OverseasInfoDetailArgs {
         help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
     )]
     pub exchange: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasScreenerArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
+
+    #[arg(long, help = "현재가 시작 범위")]
+    pub price_start: Option<String>,
+
+    #[arg(long, help = "현재가 끝 범위")]
+    pub price_end: Option<String>,
+
+    #[arg(long, help = "등락율 시작 범위")]
+    pub rate_start: Option<String>,
+
+    #[arg(long, help = "등락율 끝 범위")]
+    pub rate_end: Option<String>,
+
+    #[arg(long = "market-cap-start", help = "시가총액 시작 범위")]
+    pub market_cap_start: Option<String>,
+
+    #[arg(long = "market-cap-end", help = "시가총액 끝 범위")]
+    pub market_cap_end: Option<String>,
+
+    #[arg(long, help = "발행주식수 시작 범위")]
+    pub shares_start: Option<String>,
+
+    #[arg(long, help = "발행주식수 끝 범위")]
+    pub shares_end: Option<String>,
+
+    #[arg(long, help = "거래량 시작 범위")]
+    pub volume_start: Option<String>,
+
+    #[arg(long, help = "거래량 끝 범위")]
+    pub volume_end: Option<String>,
+
+    #[arg(long, help = "거래대금 시작 범위")]
+    pub amount_start: Option<String>,
+
+    #[arg(long, help = "거래대금 끝 범위")]
+    pub amount_end: Option<String>,
+
+    #[arg(long, help = "EPS 시작 범위")]
+    pub eps_start: Option<String>,
+
+    #[arg(long, help = "EPS 끝 범위")]
+    pub eps_end: Option<String>,
+
+    #[arg(long, help = "PER 시작 범위")]
+    pub per_start: Option<String>,
+
+    #[arg(long, help = "PER 끝 범위")]
+    pub per_end: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -1594,5 +1655,37 @@ mod tests {
 
         assert_eq!(args.stock, "AAPL");
         assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_info_screener_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "info",
+            "screener",
+            "--exchange",
+            "NAS",
+            "--price-start",
+            "160",
+            "--price-end",
+            "170",
+            "--per-start",
+            "10",
+            "--per-end",
+            "20",
+        ])
+        .unwrap();
+        let Command::Info(args) = cli.command else {
+            panic!("expected info command");
+        };
+        let InfoCommand::Screener(args) = args.command else {
+            panic!("expected info screener command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+        assert_eq!(args.price_start.as_deref(), Some("160"));
+        assert_eq!(args.price_end.as_deref(), Some("170"));
+        assert_eq!(args.per_start.as_deref(), Some("10"));
+        assert_eq!(args.per_end.as_deref(), Some("20"));
     }
 }
