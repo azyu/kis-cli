@@ -3,7 +3,7 @@ use std::process::Command as ProcessCommand;
 
 use clap::Parser;
 use kis_cli::cli::{
-    BalanceArgs, BalanceCommand, Cli, Command, OrderCommand, ReservationCancelRegion,
+    BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, OrderCommand, ReservationCancelRegion,
     ReservationRegion, WsCommand,
 };
 use kis_cli::render::{render_pairs, render_table};
@@ -92,6 +92,61 @@ fn parses_overseas_daily_price_command() {
 
     assert_eq!(args.exchange.as_deref(), Some("NAS"));
     assert!(args.daily);
+}
+
+#[test]
+fn parses_overseas_daily_chart_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "chart",
+        "daily",
+        "AAPL",
+        "--exchange",
+        "NAS",
+        "--start",
+        "20260301",
+        "--end",
+        "20260306",
+    ])
+    .unwrap();
+
+    let Command::Chart(args) = cli.command else {
+        panic!("expected chart command");
+    };
+
+    let ChartCommand::Daily(args) = args.command else {
+        panic!("expected chart daily command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+}
+
+#[test]
+fn parses_overseas_time_chart_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "chart",
+        "time",
+        "AAPL",
+        "--exchange",
+        "NAS",
+        "--unit",
+        "5",
+    ])
+    .unwrap();
+
+    let Command::Chart(args) = cli.command else {
+        panic!("expected chart command");
+    };
+
+    let ChartCommand::Time(args) = args.command else {
+        panic!("expected chart time command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    assert_eq!(args.unit, "5");
 }
 
 #[test]

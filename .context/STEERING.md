@@ -38,6 +38,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-07 현재 배치는 `rust/kis-core/src/{domestic,overseas}/*` 도메인 API, `rust/kis-core/src/{auth,client,config,error,ws}.rs` 공통 인프라, `rust/kis-cli/src/*` CLI/runtime/test 확장 순서로 진행한다
 - 개발 체크 명령은 가능하면 `Makefile` 표준 진입점(`fmt`, `fmt-check`, `lint`, `test`, `hooks-install`)에 수렴시키고, README/CI/훅은 동일 명령을 재사용한다
 - PR CI는 포맷/린트/테스트와 별개로 release `kis` 빌드 검증을 유지한다
+- 2026-03-08 이후 남은 기능 구현은 오케스트레이터가 범위를 자르고 별도 리더 에이전트에 단계별로 위임한다. 각 단계 완료 후 다음 단계에 필요한 내용만 compact summary로 넘긴다
 
 ## Blockers
 
@@ -49,6 +50,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
+- 2026-03-08: 해외 시세/시장정보 2차 잔여분의 `chart` 슬라이스를 완료했다. `kis chart daily|time ... --exchange <quote-exchange>`가 해외 종목 차트로 라우팅된다. 이번 단계는 해외 종목 일별/분별 차트만 포함하며, 해외 시간차트는 기본 1페이지(`NREC=120`) 조회로 제한한다.
+- 2026-03-08: 남은 해외 시세/시장정보 2차 잔여분은 `chart -> search/info -> ranking` 순서의 단계형 슬라이스로 진행한다. `chart` 계열을 완료했고 다음 단계는 `search/info`다. 리더 에이전트가 구현을 소유하고 오케스트레이터가 범위/검증/인수인계를 관리한다.
 - 2026-03-08: 작업 컨텍스트 문서 canonical 경로를 `.context/TASKS.md`, `.context/STEERING.md`로 이동한다. 기존 `.claude/`는 협업 문서 기준 경로로 사용하지 않는다.
 - 2026-03-08: 저장소 작업 완료 기준은 `AGENTS.md`의 DoD를 따른다. 작업은 `main`에서 분기한 브랜치에서 시작하고, 논리적 단계별 커밋 후 원격 push와 PR 작성까지를 기본 후속 절차로 명시한다.
 - 2026-03-08: 개발 체크 표준화 마일스톤에서는 `rust-toolchain.toml`로 Rust 채널과 `clippy`/`rustfmt` 컴포넌트를 고정하고, 로컬/CI/훅은 `Makefile`을 공통 진입점으로 사용한다. 다만 PR CI의 release build 검증은 별도 step으로 유지한다.

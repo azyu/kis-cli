@@ -173,6 +173,13 @@ pub struct ChartDailyArgs {
     #[arg(help = "종목코드")]
     pub stock: String,
 
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+
     #[arg(long, help = "시작일 (YYYYMMDD)")]
     pub start: Option<String>,
 
@@ -187,6 +194,13 @@ pub struct ChartDailyArgs {
 pub struct ChartTimeArgs {
     #[arg(help = "종목코드")]
     pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
 
     #[arg(long, default_value = "1", help = "분봉 단위 (1, 5, 10, 15, 30, 60)")]
     pub unit: String,
@@ -1335,6 +1349,57 @@ mod tests {
         assert_eq!(args.start.as_deref(), Some("20260101"));
         assert_eq!(args.end.as_deref(), Some("20260306"));
         assert_eq!(args.period, "W");
+    }
+
+    #[test]
+    fn parses_overseas_chart_daily_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "chart",
+            "daily",
+            "AAPL",
+            "--exchange",
+            "NAS",
+            "--start",
+            "20260301",
+            "--end",
+            "20260306",
+        ])
+        .unwrap();
+        let Command::Chart(args) = cli.command else {
+            panic!("expected chart command");
+        };
+        let ChartCommand::Daily(args) = args.command else {
+            panic!("expected chart daily command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
+    fn parses_overseas_chart_time_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "chart",
+            "time",
+            "AAPL",
+            "--exchange",
+            "NAS",
+            "--unit",
+            "5",
+        ])
+        .unwrap();
+        let Command::Chart(args) = cli.command else {
+            panic!("expected chart command");
+        };
+        let ChartCommand::Time(args) = args.command else {
+            panic!("expected chart time command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+        assert_eq!(args.unit, "5");
     }
 
     #[test]

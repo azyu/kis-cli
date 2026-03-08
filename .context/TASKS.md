@@ -69,6 +69,7 @@
 - [x] GitHub release target 확대 (`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`) — Agent: Main
 - [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
 - [x] 개발 체크 표준화 (`rust-toolchain.toml`, `Makefile`, repo hooks, CI/문서 동기화) — Agent: Main
+- [x] 해외주식 시세/시장정보 2차 잔여분 1차 (`chart` 계열) — Agent: Leader
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain
@@ -81,6 +82,8 @@
 - [x] 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`) — Agent: Main
 - [x] 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`) — Agent: Main
 - [ ] 해외주식 시세/시장정보 2차 잔여분 (chart/search/ranking 계열) — Agent: Domain
+- [ ] 해외주식 시세/시장정보 2차 잔여분 2차 (`search/info` 계열) — Agent: Leader
+- [ ] 해외주식 시세/시장정보 2차 잔여분 3차 (`ranking` 계열) — Agent: Leader
 - [x] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Main
 - [x] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Main
 - [x] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Main

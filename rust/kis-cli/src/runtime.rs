@@ -13,8 +13,8 @@ use kis_core::config::AppConfig;
 use kis_core::domestic::{balance, chart, finance, info, market, order, overtime, price, quote};
 use kis_core::error::KisError;
 use kis_core::overseas::{
-    balance as overseas_balance, exchange::OrderExchange, order as overseas_order,
-    price as overseas_price, quote as overseas_quote,
+    balance as overseas_balance, chart as overseas_chart, exchange::OrderExchange,
+    order as overseas_order, price as overseas_price, quote as overseas_quote,
 };
 use kis_core::ws as kis_ws;
 use serde::Serialize;
@@ -543,6 +543,36 @@ fn write_overseas_asking_price(
 async fn run_chart(runtime: &Runtime, args: cli::ChartArgs, writer: &mut dyn Write) -> Result<()> {
     match args.command {
         cli::ChartCommand::Daily(args) => {
+            if let Some(exchange) = args.exchange {
+                let items = overseas_chart::get_daily_chart(
+                    &runtime.client,
+                    &exchange,
+                    &args.stock,
+                    args.start.as_deref().unwrap_or(""),
+                    args.end.as_deref().unwrap_or(""),
+                    Some(args.period.as_str()),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            item.xymd, item.open, item.high, item.low, item.clos, item.tvol,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &["날짜", "시가", "고가", "저가", "종가", "거래량"],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items = chart::get_daily_chart(
                 &runtime.client,
                 &args.stock,
@@ -576,6 +606,44 @@ async fn run_chart(runtime: &Runtime, args: cli::ChartArgs, writer: &mut dyn Wri
             writeln!(writer, "{table}")?;
         }
         cli::ChartCommand::Time(args) => {
+            if let Some(exchange) = args.exchange {
+                let items = overseas_chart::get_time_chart(
+                    &runtime.client,
+                    &exchange,
+                    &args.stock,
+                    Some(args.unit.as_str()),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            item.xymd, item.xhms, item.last, item.open, item.high, item.low,
+                            item.evol, item.tvol,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &[
+                        "일자",
+                        "시각",
+                        "현재가",
+                        "시가",
+                        "고가",
+                        "저가",
+                        "체결량",
+                        "누적거래량",
+                    ],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items =
                 chart::get_time_chart(&runtime.client, &args.stock, Some(args.unit.as_str()))
                     .await?;
