@@ -123,6 +123,16 @@ struct WsRequestPayloads {
 }
 
 #[derive(Debug, Serialize)]
+struct WsStreamRowOutput<'a> {
+    kind: &'a str,
+    stock: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request: Option<&'a str>,
+    tr_id: &'a str,
+    row: &'a kis_ws::RealtimeRow,
+}
+
+#[derive(Debug, Serialize)]
 struct OrderOutput {
     side: &'static str,
     order_org_no: String,
@@ -152,6 +162,7 @@ enum OverseasModifyMode {
 }
 
 pub async fn run(cli: cli::Cli, writer: &mut dyn Write) -> Result<()> {
+    validate_stream_output_contract(&cli)?;
     let runtime = initialize(&cli).await?;
 
     match cli.command {
@@ -191,6 +202,34 @@ fn resolve_config_path(cli_config: Option<&Path>) -> Result<PathBuf> {
 
     let home = dirs::home_dir().context("determining home directory")?;
     Ok(home.join(".config").join("kis").join("config.yaml"))
+}
+
+fn validate_stream_output_contract(cli: &cli::Cli) -> Result<()> {
+    if !cli.output_format().is_json() {
+        return Ok(());
+    }
+
+    if ws_stream_requested(&cli.command) {
+        return Err(validation_error(
+            "--stream cannot be used with --json or --output json",
+        ));
+    }
+
+    Ok(())
+}
+
+fn ws_stream_requested(command: &cli::Command) -> bool {
+    match command {
+        cli::Command::Ws(args) => match &args.command {
+            cli::WsCommand::Approval => false,
+            cli::WsCommand::Collect(args) => args.stream,
+            cli::WsCommand::Ask(args)
+            | cli::WsCommand::Ccnl(args)
+            | cli::WsCommand::OvertimeAsk(args)
+            | cli::WsCommand::OvertimeCcnl(args) => args.stream,
+        },
+        _ => false,
+    }
 }
 
 async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Write) -> Result<()> {
@@ -3043,6 +3082,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
         }
         cli::WsCommand::Collect(args) => {
             let requests = collect_ws_requests(runtime, &args).await?;
+            if args.stream {
+                return write_ws_request_stream_payloads(writer, &requests);
+            }
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &requests);
             }
@@ -3059,6 +3101,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     args.reconnects,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(writer, "ask", stock, None, &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3070,6 +3115,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     &args,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "ask", &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3087,6 +3135,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     args.reconnects,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(writer, "ccnl", stock, None, &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3095,6 +3146,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                 let payloads =
                     collect_ws_symbol_payloads(runtime, kis_ws::domestic_ccnl_spec(), &args)
                         .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "ccnl", &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3112,6 +3166,15 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     args.reconnects,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(
+                        writer,
+                        "overtime-ask",
+                        stock,
+                        None,
+                        &payloads,
+                    );
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3123,6 +3186,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     &args,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "overtime-ask", &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3140,6 +3206,15 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     args.reconnects,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(
+                        writer,
+                        "overtime-ccnl",
+                        stock,
+                        None,
+                        &payloads,
+                    );
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3151,6 +3226,9 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                     &args,
                 )
                 .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "overtime-ccnl", &payloads);
+                }
                 if runtime.output_json {
                     return write_command_json(writer, runtime.command_name, &payloads);
                 }
@@ -3251,6 +3329,23 @@ fn write_ws_request_payloads(writer: &mut dyn Write, requests: &[WsRequestPayloa
     Ok(())
 }
 
+fn write_ws_request_stream_payloads(
+    writer: &mut dyn Write,
+    requests: &[WsRequestPayloads],
+) -> Result<()> {
+    for request in requests {
+        write_ws_stream_payloads(
+            writer,
+            &request.kind,
+            &request.stock,
+            Some(request.request.as_str()),
+            &request.payloads,
+        )?;
+    }
+
+    Ok(())
+}
+
 fn write_ws_symbol_payloads(
     writer: &mut dyn Write,
     streams: &[WsSymbolPayloads],
@@ -3267,6 +3362,57 @@ fn write_ws_symbol_payloads(
         }
         writeln!(writer, "종목: {}", stream.stock)?;
         write_payloads(writer, &stream.payloads)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_symbol_stream_payloads(
+    writer: &mut dyn Write,
+    kind: &str,
+    streams: &[WsSymbolPayloads],
+) -> Result<()> {
+    for stream in streams {
+        write_ws_stream_payloads(writer, kind, &stream.stock, None, &stream.payloads)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_stream_payloads(
+    writer: &mut dyn Write,
+    kind: &str,
+    stock: &str,
+    request: Option<&str>,
+    payloads: &[kis_ws::RealtimePayload],
+) -> Result<()> {
+    for payload in payloads {
+        write_ws_stream_payload(writer, kind, stock, request, payload)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_stream_payload(
+    writer: &mut dyn Write,
+    kind: &str,
+    stock: &str,
+    request: Option<&str>,
+    payload: &kis_ws::RealtimePayload,
+) -> Result<()> {
+    for row in &payload.rows {
+        serde_json::to_writer(
+            &mut *writer,
+            &WsStreamRowOutput {
+                kind,
+                stock,
+                request,
+                tr_id: &payload.tr_id,
+                row,
+            },
+        )?;
+        writeln!(writer)?;
+        writer.flush()?;
     }
 
     Ok(())
@@ -3911,6 +4057,7 @@ fn yn_to_mark(value: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use clap::Parser;
     use kis_core::config::{AppConfig, Environment};
     use serde_json::json;
 
@@ -3918,9 +4065,9 @@ mod tests {
         KisError, OverseasModifyMode, OverseasPlaceMode, WsRequestPayloads, WsSymbolPayloads,
         build_overseas_screener_request, classify_error, config_output, display_or_dash,
         mask_app_key, order_output, overseas_modify_mode, overseas_place_mode, price_sign,
-        reserve_order_output, validation_error, write_command_json, write_json_error,
-        write_json_raw, write_ws_ask, write_ws_ccnl, write_ws_request_payloads,
-        write_ws_symbol_payloads, yn_to_mark,
+        reserve_order_output, validate_stream_output_contract, validation_error,
+        write_command_json, write_json_error, write_json_raw, write_ws_ask, write_ws_ccnl,
+        write_ws_request_payloads, write_ws_stream_payload, write_ws_symbol_payloads, yn_to_mark,
     };
 
     #[test]
@@ -4377,5 +4524,108 @@ mod tests {
         assert!(output.contains("요청: ccnl:000660"));
         assert!(output.contains("70010"));
         assert!(output.contains("VI기준가"));
+    }
+
+    #[test]
+    fn rejects_ws_stream_with_global_json_alias() {
+        let cli =
+            kis_cli::cli::Cli::try_parse_from(["kis", "--json", "ws", "ask", "005930", "--stream"])
+                .unwrap();
+
+        let err = validate_stream_output_contract(&cli).unwrap_err();
+        assert!(err.to_string().contains("--stream"));
+        assert!(err.to_string().contains("--json"));
+    }
+
+    #[test]
+    fn rejects_ws_stream_with_global_json_output() {
+        let cli = kis_cli::cli::Cli::try_parse_from([
+            "kis",
+            "--output",
+            "json",
+            "ws",
+            "collect",
+            "ask:005930",
+            "--stream",
+        ])
+        .unwrap();
+
+        let err = validate_stream_output_contract(&cli).unwrap_err();
+        assert!(err.to_string().contains("--stream"));
+        assert!(err.to_string().contains("--output json"));
+    }
+
+    #[test]
+    fn allows_non_stream_ws_with_global_json_output() {
+        let cli = kis_cli::cli::Cli::try_parse_from(["kis", "--json", "ws", "approval"]).unwrap();
+        validate_stream_output_contract(&cli).unwrap();
+    }
+
+    #[test]
+    fn writes_ws_stream_payload_as_ndjson_rows() {
+        let payload = kis_core::ws::RealtimePayload {
+            tr_id: "H0STCNT0".to_string(),
+            rows: vec![
+                kis_core::ws::RealtimeRow::from([
+                    ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                    ("stck_cntg_hour".to_string(), "090001".to_string()),
+                    ("stck_prpr".to_string(), "70000".to_string()),
+                ]),
+                kis_core::ws::RealtimeRow::from([
+                    ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                    ("stck_cntg_hour".to_string(), "090002".to_string()),
+                    ("stck_prpr".to_string(), "70100".to_string()),
+                ]),
+            ],
+        };
+
+        let mut writer = Vec::new();
+        write_ws_stream_payload(&mut writer, "ccnl", "005930", None, &payload).unwrap();
+
+        let lines = String::from_utf8(writer)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[0],
+            json!({
+                "kind": "ccnl",
+                "stock": "005930",
+                "tr_id": "H0STCNT0",
+                "row": {
+                    "mksc_shrn_iscd": "005930",
+                    "stck_cntg_hour": "090001",
+                    "stck_prpr": "70000"
+                }
+            })
+        );
+        assert_eq!(lines[1]["row"]["stck_cntg_hour"], "090002");
+        assert!(lines[0].get("request").is_none());
+    }
+
+    #[test]
+    fn writes_ws_stream_payload_request_when_present() {
+        let payload = kis_core::ws::RealtimePayload {
+            tr_id: "H0STASP0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                ("bsop_hour".to_string(), "090001".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+            ])],
+        };
+
+        let mut writer = Vec::new();
+        write_ws_stream_payload(&mut writer, "ask", "005930", Some("ask:005930"), &payload)
+            .unwrap();
+
+        let line = String::from_utf8(writer).unwrap();
+        let value: serde_json::Value = serde_json::from_str(line.trim_end()).unwrap();
+        assert_eq!(value["request"], "ask:005930");
+        assert_eq!(value["kind"], "ask");
+        assert_eq!(value["stock"], "005930");
+        assert_eq!(value["tr_id"], "H0STASP0");
     }
 }

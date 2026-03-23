@@ -79,6 +79,7 @@
 - [x] WebSocket 실시간 시세 표면 확대 2차 1차 (`동일 spec 다중 종목`) — Agent: Leader
 - [x] WebSocket 실시간 시세 표면 확대 2차 2차 (`mixed spec` / `mixed stream` 입력 surface) — Agent: Leader
 - [x] E2E 통합 테스트 (모의투자) 1차 (`ignored smoke harness`) — Agent: Leader
+- [x] WebSocket NDJSON 스트리밍 출력 1차 (`ws --stream`) — Agent: Leader
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain

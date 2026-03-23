@@ -959,6 +959,9 @@ pub struct WsStreamArgs {
     #[arg(num_args = 1.., help = "종목코드 (여러 개 가능)")]
     pub stocks: Vec<String>,
 
+    #[arg(long, help = "text/json batch 대신 NDJSON row stream 출력")]
+    pub stream: bool,
+
     #[arg(long, default_value_t = 1, help = "종목별 수집할 메시지 개수")]
     pub count: usize,
 
@@ -981,6 +984,9 @@ pub struct WsCollectArgs {
         help = "실시간 요청 (ask:005930, ccnl:005930, overtime-ask:005930, overtime-ccnl:005930)"
     )]
     pub requests: Vec<WsCollectRequest>,
+
+    #[arg(long, help = "text/json batch 대신 NDJSON row stream 출력")]
+    pub stream: bool,
 
     #[arg(long, default_value_t = 1, help = "요청별 수집할 메시지 개수")]
     pub count: usize,
@@ -1556,6 +1562,7 @@ mod tests {
         assert_eq!(args.stocks, vec!["005930".to_string()]);
         assert_eq!(args.count, 2);
         assert_eq!(args.timeout_secs, 10);
+        assert!(!args.stream);
     }
 
     #[test]
@@ -1601,6 +1608,21 @@ mod tests {
             vec!["005930".to_string(), "000660".to_string()]
         );
         assert_eq!(args.count, 2);
+        assert!(!args.stream);
+    }
+
+    #[test]
+    fn parses_ws_stream_flag() {
+        let cli = Cli::try_parse_from(["kis", "ws", "ask", "005930", "--stream"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert!(args.stream);
     }
 
     #[test]
@@ -1629,6 +1651,21 @@ mod tests {
         assert_eq!(args.requests[1].kind, WsCollectKind::Ccnl);
         assert_eq!(args.requests[1].stock, "000660");
         assert_eq!(args.count, 2);
+        assert!(!args.stream);
+    }
+
+    #[test]
+    fn parses_ws_collect_stream_flag() {
+        let cli = Cli::try_parse_from(["kis", "ws", "collect", "ask:005930", "--stream"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Collect(args) = args.command else {
+            panic!("expected ws collect command");
+        };
+
+        assert!(args.stream);
     }
 
     #[test]

@@ -135,15 +135,18 @@ kis balance reserve-orders --region us --start 20260301 --end 20260307 --exchang
 kis ws approval
 kis ws ask 005930 --count 1
 kis ws ask 005930 000660 --count 1
+kis ws ask 005930 --count 3 --stream
 kis ws ccnl 005930 --count 3
 kis ws overtime-ask 005930 --count 1
 kis ws overtime-ccnl 005930 000660 --count 1
 kis ws overtime-ccnl 005930 --count 3
 kis ws collect ask:005930 ccnl:005930 overtime-ask:005930 --count 1
+kis ws collect ask:005930 ccnl:005930 --count 2 --stream
 ```
 
 여러 종목을 넘기면 같은 실시간 spec 안에서 종목별로 순차 수집하며, `--count`는 종목별 메시지 개수입니다.
 `kis ws collect`는 서로 다른 stream request를 섞어 받을 수 있고, `--count`는 요청별 메시지 개수입니다.
+`--stream`은 `ws ask|ccnl|overtime-ask|overtime-ccnl|collect`에서 NDJSON row를 stdout으로 출력합니다.
 
 ### 재무 / 기업정보 / 시장현황
 
@@ -192,6 +195,7 @@ JSON 모드에서는 성공/실패 모두 공통 envelope를 사용합니다.
 ```
 
 실패 시에는 `error.kind`가 `validation`, `api`, `config`, `runtime` 중 하나로 출력됩니다.
+`ws --stream`은 NDJSON 전용 출력이라 `--json` 또는 `--output json`과 함께 사용할 수 없습니다.
 
 ### 자동화 / 에이전트 사용
 

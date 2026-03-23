@@ -64,6 +64,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: WebSocket 다중 구독 UX도 다시 `동일 spec 다중 종목`과 `mixed spec/mixed stream`으로 분리한다. 먼저 같은 TR에 여러 종목을 붙이는 수준까지만 구현하고, 서로 다른 stream을 한 번에 섞는 입력 surface는 후속으로 남긴다.
 - 2026-03-08: `mixed spec` 단계에서도 진짜 동시 multiplex collector를 먼저 만들지 않는다. 우선은 approval key 재사용 + 기존 collector 조합으로 mixed input surface를 제공하고, 필요 시 이후에 동시 수집 모델을 검토한다.
 - 2026-03-08: E2E 통합 테스트는 실제 자격증명 의존성이 있으므로 `ignored smoke harness`부터 추가한다. 기본 `make test`에는 포함하지 않고, opt-in 실행 경로와 필요한 환경 변수만 문서화한다.
+- 2026-03-08: WebSocket 파이프/LLM 전달용 출력은 기존 batch 계약과 분리한다. `ws` 전용 `--stream`은 성공 출력만 NDJSON으로 즉시 flush하고, 기존 batch `text/json` 계약은 유지한다. `--stream`과 전역 JSON 모드는 섞지 않는다.
+- 2026-03-24: WebSocket NDJSON 스트리밍 출력 1차를 완료했다. `kis ws ask|ccnl|overtime-ask|overtime-ccnl|collect --stream`이 row 단위 NDJSON을 stdout으로 출력하고 각 라인마다 flush한다. `--stream`은 `--json`/`--output json`과 함께 쓰지 못하며, 기존 batch text/json 출력 계약은 유지한다.
 - 2026-03-08: WebSocket 표면 확대 1차를 완료했다. `kis ws ask <symbol>`와 `kis ws ccnl <symbol>`를 추가하고, 기존 `kis ws overtime-ask|overtime-ccnl`의 approval-key + count-limited collect + 기본 재연결 모델을 그대로 재사용한다. 다중 구독 UX는 이번 단계에 넣지 않는다.
 - 2026-03-08: WebSocket 다중 구독 UX 1차를 완료했다. `kis ws ask|ccnl|overtime-ask|overtime-ccnl <symbol>...`가 같은 spec 안에서 여러 종목을 순차 수집할 수 있고, approval key는 한 번만 발급해 종목별 수집에 재사용한다. `--count`는 종목별 메시지 개수로 해석한다.
 - 2026-03-08: WebSocket 다중 구독 UX 2차를 완료했다. 전용 `kis ws collect KIND:SYMBOL...` surface로 `ask|ccnl|overtime-ask|overtime-ccnl`를 섞어 요청할 수 있고, 수집은 요청별 순차 처리지만 approval key는 1회만 발급해 재사용한다. `--count`는 요청별 메시지 개수다.
