@@ -52,6 +52,7 @@
 - [x] Rust 공식 진입점 승격 (`kis-rs` -> `kis`) — Agent: Main
 - [x] 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 변경 (fallback 없음) — Agent: Main
 - [x] 해외주식 시세/시장정보 2차 1차 (`dailyprice`, `inquire-asking-price`, `inquire-ccnl`) — Agent: Main
+- [x] Virtual 읽기 API triage 안정화 (`chart daily` 파싱 수정, known blocker smoke/문서 고정) — Agent: Main
 
 ## In Progress
 - [x] 작업 컨텍스트 문서 경로를 `.claude/`에서 `.context/`로 이전 — Agent: Main

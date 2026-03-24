@@ -52,11 +52,42 @@ impl VirtualSmokeContext {
 
         serde_json::from_slice(&output.stdout).unwrap()
     }
+
+    fn run_json_failure(&self, args: &[&str]) -> Value {
+        let output = ProcessCommand::new(env!("CARGO_BIN_EXE_kis"))
+            .arg("--config")
+            .arg(&self.config)
+            .arg("--env")
+            .arg("virtual")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+
+        assert!(
+            !output.status.success(),
+            "stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+
+        serde_json::from_slice(&output.stdout).unwrap()
+    }
 }
 
 fn assert_success_command(value: &Value, command: &str) {
     assert_eq!(value["ok"], true, "response: {value}");
     assert_eq!(value["command"], command, "response: {value}");
+}
+
+fn assert_error_command(value: &Value, command: &str) {
+    assert_eq!(value["ok"], false, "response: {value}");
+    assert_eq!(value["command"], command, "response: {value}");
+    assert!(
+        value["error"]["message"]
+            .as_str()
+            .is_some_and(|message| !message.is_empty()),
+        "response: {value}"
+    );
 }
 
 #[test]
@@ -93,4 +124,41 @@ fn runs_virtual_price_commands() {
         .as_array()
         .expect("daily price data should be an array");
     assert!(!items.is_empty(), "response: {daily}");
+}
+
+#[test]
+#[ignore = "opt-in virtual smoke; set KIS_E2E_VIRTUAL=1 and KIS_E2E_VIRTUAL_CONFIG"]
+fn runs_virtual_chart_daily_command() {
+    let Some(ctx) = VirtualSmokeContext::load() else {
+        return;
+    };
+
+    let value = ctx.run_json(&[
+        "chart", "daily", &ctx.stock, "--start", "20260301", "--end", "20260324",
+    ]);
+
+    assert_success_command(&value, "chart");
+    let items = value["data"]
+        .as_array()
+        .expect("daily chart data should be an array");
+    assert!(!items.is_empty(), "response: {value}");
+}
+
+#[test]
+#[ignore = "opt-in virtual smoke; set KIS_E2E_VIRTUAL=1 and KIS_E2E_VIRTUAL_CONFIG"]
+fn virtual_known_blockers_surface_structured_errors() {
+    let Some(ctx) = VirtualSmokeContext::load() else {
+        return;
+    };
+
+    let quote = ctx.run_json_failure(&["quote", "ask", &ctx.stock]);
+    assert_error_command(&quote, "quote");
+
+    let holiday = ctx.run_json_failure(&["market", "holiday", "20260324"]);
+    assert_error_command(&holiday, "market");
+    assert_eq!(holiday["error"]["code"], "EGW2004", "response: {holiday}");
+
+    let search = ctx.run_json_failure(&["info", "search", "삼성전자"]);
+    assert_error_command(&search, "info");
+    assert_eq!(search["error"]["code"], "EGW2004", "response: {search}");
 }
