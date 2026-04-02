@@ -12,6 +12,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 2. `ratatui` 필요성 재평가 (`kis tui`는 후속)
 3. WebSocket 표면 확대 여부 재평가 (정규장 시세/체결, 다중 구독 UX)
 4. agent-friendly CLI 계약 후속 정리 (`--output`, JSON envelope, `--quiet`, 주문 `--dry-run` 이후 문서 동기화)
+5. 태그 push 기반 GitHub Release/Homebrew tap 자동화 정착
 
 ## Agent Assignment
 
@@ -81,6 +82,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: 개발 체크 표준화 마일스톤에서는 `rust-toolchain.toml`로 Rust 채널과 `clippy`/`rustfmt` 컴포넌트를 고정하고, 로컬/CI/훅은 `Makefile`을 공통 진입점으로 사용한다. 다만 PR CI의 release build 검증은 별도 step으로 유지한다.
 - 2026-03-08: repo hooks는 `.githooks/`에 커밋하고 `make hooks-install`로 `core.hooksPath`를 설정한다. 문서에는 POSIX shell + `make` 기준 워크플로우(macOS/Linux, Windows는 Git Bash/WSL)를 명시한다.
 - 2026-03-07: `release-build.yml`은 5개 자산(`linux amd64`, `linux arm64`, `macOS arm64`, `Windows x64`, `Windows arm64`)을 matrix로 빌드한다. Linux/macOS는 `tar.gz`, Windows는 `zip`으로 패키징하고, release job은 두 형식 모두에 대한 `checksums.txt`를 생성한다.
+- 2026-04-03: 릴리즈 워크플로우는 `v*.*.*` 태그 push 또는 수동 실행을 모두 지원한다. 태그 릴리즈 후 `HOMEBREW_TAP_TOKEN`이 설정되어 있으면 `azyu/homebrew-tap`의 `kis.rb` formula를 release asset checksum 기준으로 자동 갱신한다. 초기 formula 검증은 `kis --help` 기반으로 유지한다.
 - 2026-03-07: GitHub Actions는 `bb-cli`와 같은 최소 패턴을 유지하되, `release-build.yml`은 수동 `release_tag` 입력으로 platform matrix 자산과 `checksums.txt`를 GitHub Release에 업로드한다. Homebrew tap/formula 자동화는 이 마일스톤에 포함하지 않는다.
 - 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.
 - 2026-03-07: `kis order reserve-cancel`은 검증된 TR ID가 있는 미국 예약취소만 지원한다. `balance reserve-orders`는 기존대로 `us|asia` 조회를 유지하고, Asia 예약취소는 TR ID가 확인되기 전까지 CLI에서 노출하지 않는다.

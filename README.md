@@ -4,6 +4,16 @@
 
 ## 설치
 
+### Homebrew
+
+```bash
+brew install azyu/tap/kis
+```
+
+태그 릴리즈가 발행되면 Homebrew tap formula도 함께 갱신됩니다.
+
+### 수동 설치
+
 Rust toolchain이 준비되어 있다면 release 바이너리를 바로 빌드할 수 있습니다.
 
 ```bash

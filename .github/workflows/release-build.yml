@@ -1,6 +1,9 @@
 name: Release Build
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -12,8 +15,38 @@ permissions:
   contents: read
 
 jobs:
+  prepare:
+    name: Resolve Release Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      version: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${TAG}"
+            echo "Expected format: vMAJOR.MINOR.PATCH (example: v0.1.0)"
+            exit 1
+          fi
+
+          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.name }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -54,18 +87,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag }}
-
-      - name: Validate release tag format
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
-          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag: ${TAG}"
-            echo "Expected format: vMAJOR.MINOR.PATCH (example: v0.1.0)"
-            exit 1
-          fi
+          ref: ${{ needs.prepare.outputs.release_tag }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@master
@@ -88,8 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
+          VERSION="${{ needs.prepare.outputs.version }}"
           ARCHIVE_NAME="kis_${VERSION}_${{ matrix.asset_name }}"
 
           mkdir staging
@@ -102,7 +123,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = "${{ inputs.release_tag }}".TrimStart("v")
+          $version = "${{ needs.prepare.outputs.version }}"
           $archiveName = "kis_${version}_${{ matrix.asset_name }}"
 
           New-Item -ItemType Directory -Force -Path staging | Out-Null
@@ -119,7 +140,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -136,18 +157,103 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum *.tar.gz *.zip | sort -k2 > checksums.txt
+          find . -maxdepth 1 -type f ! -name checksums.txt -print0 | \
+            xargs -0 sha256sum | \
+            sed 's# \./# #g' | \
+            sort -k2 > checksums.txt
 
-      - name: Create or update release
+      - name: Create, update, and publish release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
+          TAG="${{ needs.prepare.outputs.release_tag }}"
 
           if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
           else
             gh release create "${TAG}" dist/* --title "${TAG}" --generate-notes --repo "${GITHUB_REPOSITORY}"
           fi
+
+          gh release edit "${TAG}" --draft=false --prerelease=false --repo "${GITHUB_REPOSITORY}"
+
+  homebrew-tap:
+    name: Update Homebrew Tap
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+    steps:
+      - name: Skip when Homebrew tap token is not configured
+        if: ${{ !env.HOMEBREW_TAP_TOKEN }}
+        shell: bash
+        run: echo "HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew tap update."
+
+      - name: Checkout homebrew-tap
+        if: ${{ env.HOMEBREW_TAP_TOKEN != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: azyu/homebrew-tap
+          token: ${{ env.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Render formula from release assets
+        if: ${{ env.HOMEBREW_TAP_TOKEN != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets > release.json
+
+          ruby <<'RUBY'
+          require "json"
+
+          tag = ENV.fetch("RELEASE_TAG")
+          version = tag.sub(/\Av/, "")
+          release = JSON.parse(File.read("release.json"))
+          assets = release.fetch("assets").each_with_object({}) do |asset, index|
+            digest = asset["digest"]
+            next unless digest
+            index[asset.fetch("name")] = digest.sub(/\Asha256:/, "")
+          end
+
+          replacements = {
+            "{{VERSION}}" => version,
+            "{{MACOS_ARM64_SHA256}}" => assets.fetch("kis_#{version}_macos_arm64.tar.gz"),
+            "{{LINUX_AMD64_SHA256}}" => assets.fetch("kis_#{version}_linux_amd64.tar.gz"),
+            "{{LINUX_ARM64_SHA256}}" => assets.fetch("kis_#{version}_linux_arm64.tar.gz"),
+          }
+
+          formula = File.read("homebrew-tap/kis.rb.template")
+          replacements.each do |placeholder, value|
+            formula = formula.gsub(placeholder, value)
+          end
+          File.write("homebrew-tap/kis.rb", formula)
+          RUBY
+
+      - name: Commit and push formula update
+        if: ${{ env.HOMEBREW_TAP_TOKEN != '' }}
+        shell: bash
+        working-directory: homebrew-tap
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$(git status --short -- kis.rb)" ]]; then
+            echo "No Homebrew formula changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kis.rb
+          git commit -m "feat: update kis to ${RELEASE_TAG#v}"
+          git push origin HEAD:main
