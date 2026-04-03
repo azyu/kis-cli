@@ -347,10 +347,18 @@ pub struct ReserveCancelOrderArgs {
     )]
     pub region: ReservationCancelRegion,
 
-    #[arg(long = "receipt-date", required = true, help = "예약주문 접수일자 (YYYYMMDD)")]
+    #[arg(
+        long = "receipt-date",
+        required = true,
+        help = "예약주문 접수일자 (YYYYMMDD)"
+    )]
     pub receipt_date: String,
 
-    #[arg(long = "reservation-order-no", required = true, help = "해외 예약주문번호")]
+    #[arg(
+        long = "reservation-order-no",
+        required = true,
+        help = "해외 예약주문번호"
+    )]
     pub reservation_order_no: String,
 }
 
@@ -464,7 +472,11 @@ pub struct OverseasPeriodProfitArgs {
     #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
     pub end: String,
 
-    #[arg(long = "currency-type", default_value = "01", help = "원화외화구분코드")]
+    #[arg(
+        long = "currency-type",
+        default_value = "01",
+        help = "원화외화구분코드"
+    )]
     pub currency_type: String,
 }
 
@@ -487,7 +499,11 @@ pub struct OverseasPeriodTransArgs {
     #[arg(long, default_value = "", help = "종목코드 (기본: 전체)")]
     pub stock: String,
 
-    #[arg(long = "side", default_value = "00", help = "매도매수구분 (00:전체, 01:매도, 02:매수)")]
+    #[arg(
+        long = "side",
+        default_value = "00",
+        help = "매도매수구분 (00:전체, 01:매도, 02:매수)"
+    )]
     pub side: String,
 
     #[arg(long = "loan-type", default_value = "", help = "대출구분코드")]
@@ -741,7 +757,11 @@ pub struct WsStreamArgs {
     #[arg(long, default_value_t = 1, help = "수집할 메시지 개수")]
     pub count: usize,
 
-    #[arg(long = "timeout-secs", default_value_t = 30, help = "연결/수신 타임아웃(초)")]
+    #[arg(
+        long = "timeout-secs",
+        default_value_t = 30,
+        help = "연결/수신 타임아웃(초)"
+    )]
     pub timeout_secs: u64,
 
     #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]

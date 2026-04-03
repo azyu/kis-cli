@@ -243,7 +243,11 @@ pub async fn fetch_approval_key_with_client(
     client: &Client,
 ) -> Result<ApprovalKeyResponse> {
     let response = client
-        .post(format!("{}{}", config.environment.base_url(), APPROVAL_PATH))
+        .post(format!(
+            "{}{}",
+            config.environment.base_url(),
+            APPROVAL_PATH
+        ))
         .header("content-type", "application/json")
         .header("accept", "text/plain")
         .json(&ApprovalKeyRequest {
@@ -348,9 +352,12 @@ async fn collect_realtime_messages_once(
     max_messages: usize,
     timeout_per_connection: Duration,
 ) -> Result<Vec<RealtimePayload>> {
-    let connect = timeout(timeout_per_connection, connect_async(config.environment.ws_base_url()))
-        .await
-        .map_err(|_| KisError::Parse("websocket connect timed out".to_string()))?;
+    let connect = timeout(
+        timeout_per_connection,
+        connect_async(config.environment.ws_base_url()),
+    )
+    .await
+    .map_err(|_| KisError::Parse("websocket connect timed out".to_string()))?;
     let (mut socket, _) =
         connect.map_err(|error| KisError::Parse(format!("websocket connect failed: {error}")))?;
 
@@ -375,8 +382,8 @@ async fn collect_realtime_messages_once(
         let Some(message) = next else {
             break;
         };
-        let message =
-            message.map_err(|error| KisError::Parse(format!("websocket receive failed: {error}")))?;
+        let message = message
+            .map_err(|error| KisError::Parse(format!("websocket receive failed: {error}")))?;
 
         match message {
             Message::Text(text) => match parse_message(&text, spec.columns)? {
@@ -392,8 +399,9 @@ async fn collect_realtime_messages_once(
                 }
             },
             Message::Binary(bytes) => {
-                let text = String::from_utf8(bytes.to_vec())
-                    .map_err(|error| KisError::Parse(format!("binary payload is not utf-8: {error}")))?;
+                let text = String::from_utf8(bytes.to_vec()).map_err(|error| {
+                    KisError::Parse(format!("binary payload is not utf-8: {error}"))
+                })?;
                 match parse_message(&text, spec.columns)? {
                     ParsedMessage::Data(payload) => collected.push(payload),
                     ParsedMessage::System => {}
@@ -533,11 +541,10 @@ mod tests {
 
     #[test]
     fn parses_realtime_payload_rows() {
-        let payload = parse_realtime_payload("0|H0STOUP0|2|005930^160000^70000^005930^160001^70100", &[
-            "mksc_shrn_iscd",
-            "stck_cntg_hour",
-            "stck_prpr",
-        ])
+        let payload = parse_realtime_payload(
+            "0|H0STOUP0|2|005930^160000^70000^005930^160001^70100",
+            &["mksc_shrn_iscd", "stck_cntg_hour", "stck_prpr"],
+        )
         .unwrap();
 
         assert_eq!(payload.tr_id, "H0STOUP0");
@@ -548,11 +555,10 @@ mod tests {
 
     #[test]
     fn rejects_mismatched_realtime_row_count() {
-        let err = parse_realtime_payload("0|H0STOUP0|2|005930^160000^70000", &[
-            "mksc_shrn_iscd",
-            "stck_cntg_hour",
-            "stck_prpr",
-        ])
+        let err = parse_realtime_payload(
+            "0|H0STOUP0|2|005930^160000^70000",
+            &["mksc_shrn_iscd", "stck_cntg_hour", "stck_prpr"],
+        )
         .unwrap_err();
 
         assert!(err.to_string().contains("row count mismatch"));
@@ -567,8 +573,11 @@ mod tests {
         .unwrap();
         assert_eq!(ok, ParsedMessage::System);
 
-        let ping = parse_message(r#"{"header":{"tr_id":"PINGPONG"}}"#, DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS)
-            .unwrap();
+        let ping = parse_message(
+            r#"{"header":{"tr_id":"PINGPONG"}}"#,
+            DOMESTIC_OVERTIME_ASKING_PRICE_COLUMNS,
+        )
+        .unwrap();
         assert_eq!(ping, ParsedMessage::PingPong);
     }
 
@@ -591,6 +600,9 @@ mod tests {
         assert_eq!(ask.tr_id, "H0STOAA0");
         assert_eq!(ccnl.tr_id, "H0STOUP0");
         assert_eq!(ask.columns.first().copied(), Some("mksc_shrn_iscd"));
-        assert_eq!(ccnl.columns.last().copied(), Some("prdy_smns_hour_acml_vol_rate"));
+        assert_eq!(
+            ccnl.columns.last().copied(),
+            Some("prdy_smns_hour_acml_vol_rate")
+        );
     }
 }
