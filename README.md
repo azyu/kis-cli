@@ -4,6 +4,32 @@
 
 ## 설치
 
+### Homebrew
+
+처음 설치할 때는 tap을 추가한 뒤 `kis`를 설치하면 됩니다.
+
+```bash
+brew tap azyu/tap
+brew install kis
+```
+
+이미 tap을 쓰고 있다면 아래 한 줄로도 설치할 수 있습니다.
+
+```bash
+brew install azyu/tap/kis
+```
+
+업데이트는 다음처럼 진행합니다.
+
+```bash
+brew update
+brew upgrade kis
+```
+
+태그 릴리즈가 발행되면 Homebrew tap formula도 함께 갱신됩니다.
+
+### 수동 설치
+
 Rust toolchain이 준비되어 있다면 release 바이너리를 바로 빌드할 수 있습니다.
 
 ```bash
@@ -23,6 +49,9 @@ cargo run --manifest-path rust/Cargo.toml -p kis-cli --bin kis -- config
 ### 1. KIS Open API 앱키 발급
 
 [한국투자증권 API 포털](https://apiportal.koreainvestment.com)에서 앱키와 시크릿키를 발급받습니다.
+
+- 공식 오류 코드는 [KIS Developers 오류코드 페이지](https://apiportal.koreainvestment.com/faq-error-code)에서 확인할 수 있습니다.
+- 공식 샘플/레퍼런스 저장소는 [koreainvestment/open-trading-api](https://github.com/koreainvestment/open-trading-api)입니다.
 
 ### 2. 설정 파일 작성
 
@@ -73,6 +102,7 @@ kis --config ~/.config/kis/config.yaml config
 kis price 005930
 kis price 005930 --daily
 kis price --exchange NAS AAPL
+kis price --exchange NAS AAPL --daily
 kis price --exchange NYS MSFT
 ```
 
@@ -80,11 +110,15 @@ kis price --exchange NYS MSFT
 
 ```bash
 kis quote ask 005930
+kis quote ask AAPL --exchange NAS
 kis quote overtime-price 005930
 kis quote overtime-ask 005930
 kis quote ccnl 005930
+kis quote ccnl AAPL --exchange NAS
 kis chart daily 005930 --start 20260101 --end 20260306
+kis chart daily AAPL --exchange NAS --start 20260301 --end 20260306
 kis chart time 005930 --unit 5
+kis chart time AAPL --exchange NAS --unit 5
 kis chart index-price 0001
 ```
 
@@ -128,9 +162,20 @@ kis balance reserve-orders --region us --start 20260301 --end 20260307 --exchang
 
 ```bash
 kis ws approval
+kis ws ask 005930 --count 1
+kis ws ask 005930 000660 --count 1
+kis ws ask 005930 --count 3 --stream
+kis ws ccnl 005930 --count 3
 kis ws overtime-ask 005930 --count 1
+kis ws overtime-ccnl 005930 000660 --count 1
 kis ws overtime-ccnl 005930 --count 3
+kis ws collect ask:005930 ccnl:005930 overtime-ask:005930 --count 1
+kis ws collect ask:005930 ccnl:005930 --count 2 --stream
 ```
+
+여러 종목을 넘기면 같은 실시간 spec 안에서 종목별로 순차 수집하며, `--count`는 종목별 메시지 개수입니다.
+`kis ws collect`는 서로 다른 stream request를 섞어 받을 수 있고, `--count`는 요청별 메시지 개수입니다.
+`--stream`은 `ws ask|ccnl|overtime-ask|overtime-ccnl|collect`에서 NDJSON row를 stdout으로 출력합니다.
 
 ### 재무 / 기업정보 / 시장현황
 
@@ -143,8 +188,17 @@ kis info dividend 005930
 kis info news 005930
 kis info opinion 005930
 kis info search 삼성
+kis info detail AAPL --exchange NAS
+kis info screener --exchange NAS --price-start 160 --price-end 170
 
 kis market volume
+kis market volume --exchange NAS
+kis market cap --exchange NAS
+kis market price-fluct --exchange NAS
+kis market new-highlow --exchange NAS
+kis market volume-surge --exchange NAS
+kis market overtime-fluctuation
+kis market overtime-volume
 kis market holiday 20260306
 ```
 
@@ -170,6 +224,7 @@ JSON 모드에서는 성공/실패 모두 공통 envelope를 사용합니다.
 ```
 
 실패 시에는 `error.kind`가 `validation`, `api`, `config`, `runtime` 중 하나로 출력됩니다.
+`ws --stream`은 NDJSON 전용 출력이라 `--json` 또는 `--output json`과 함께 사용할 수 없습니다.
 
 ### 자동화 / 에이전트 사용
 
@@ -184,17 +239,34 @@ kis config --quiet
 - 주문 자동화 전에는 `--dry-run`으로 endpoint, TR ID, 요청 payload를 먼저 확인할 수 있습니다.
 - `--quiet`은 text 모드에서만 추가 문구를 제거합니다.
 
+## Virtual E2E Smoke
+
+기본 `make test`에는 실제 모의투자 smoke가 포함되지 않습니다. opt-in으로만 실행합니다.
+
+```bash
+export KIS_E2E_VIRTUAL=1
+export KIS_E2E_VIRTUAL_CONFIG=~/.config/kis/config.yaml
+export KIS_E2E_VIRTUAL_STOCK=005930
+make test-e2e-virtual
+```
+
+- `KIS_E2E_VIRTUAL=1`이 있어야 ignored smoke가 실제 호출을 수행합니다.
+- `KIS_E2E_VIRTUAL_CONFIG`는 모의투자 자격증명이 들어 있는 설정 파일 경로입니다.
+- `KIS_E2E_VIRTUAL_STOCK`은 선택 사항이며 기본값은 `005930`입니다.
+- 현재 harness는 `config`, `price`, `price --daily`, `chart daily` 성공 경로와 일부 known blocker의 구조화 실패 경로를 함께 확인합니다.
+- 실측 기준 known virtual blocker는 `quote ask`(국내 `404 Not Found`), `market holiday`/`info search`(`EGW2004`), `info news`/`info opinion`(`OPSQ0002`), `info detail --exchange NAS`(해외 `search-info` 호출 실패), `psbl-sell`입니다.
+
 ## 지원 표면
 
-- `price`: 국내 현재가/일별시세, 해외 현재가
-- `quote`: 호가, 시간외 현재가/호가, 체결, 투자자, 회원사
-- `chart`: 일별 차트, 분별 차트, 지수 차트, 지수 현재가
+- `price`: 국내 현재가/일별시세, 해외 현재가/기간시세
+- `quote`: 국내 호가/시간외 현재가/호가/체결/투자자/회원사, 해외 호가/체결
+- `chart`: 국내 일별/분별 차트, 해외 일별/분별 차트, 지수 차트, 지수 현재가
 - `order`: 국내 매수/매도/정정/취소, 해외 매수/매도/정정/취소, 해외 예약주문, 예약취소(미국만), 미국 주간주문/정정/취소
 - `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결, 매수가능금액, 기간손익/기간거래, 지정가체결, 예약주문 조회(us/asia)
-- `market`: 거래량 순위, 휴장일
+- `market`: 국내 거래량 순위/시간외 등락율 순위/시간외 거래량 순위/휴장일, 해외 거래량 순위/시가총액 순위/급등락 순위/신고가·신저가 순위/거래량 급증 순위
 - `finance`: 재무상태표, 손익계산서, 재무비율
-- `info`: 배당정보, 뉴스, 투자의견, 종목검색
-- `ws`: approval key 발급, 국내 시간외 실시간 호가/체결
+- `info`: 국내 배당정보/뉴스/투자의견/종목검색, 해외 상품기본정보/조건검색
+- `ws`: approval key 발급, 국내 정규장/시간외 실시간 호가/체결, mixed request collect
 - `config`: 현재 설정 출력
 
 모의투자(`virtual`)에서는 일부 국내 읽기 API가 KIS 측 제한으로 `404` 또는 `EGW2004`를 반환할 수 있습니다.
@@ -211,7 +283,7 @@ kis config --quiet
 
 ## 거래소 코드 주의
 
-- 시세 조회(`price`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
+- 시세 조회(`price`, `quote ask`, `quote ccnl`, `chart daily`, `chart time`, `info detail`, `info screener`, `market volume --exchange`, `market cap`, `market price-fluct`, `market new-highlow`, `market volume-surge`)는 시세용 거래소 코드(`NAS`, `NYS`, `AMS`, `TSE`, `HKS`, `SHS`, `SZS`, `HSX`, `HNX`)를 사용합니다.
 - 해외 주문/잔고는 주문용 거래소 코드(`NASD`, `NYSE`, `AMEX`, `SEHK`, `SHAA`, `SZAA`, `TKSE`, `HASE`, `VNSE`)를 사용합니다.
 - `--daytime`은 미국 거래소(`NASD`, `NYSE`, `AMEX`) + `real` 환경에서만 허용됩니다.
 
@@ -220,6 +292,7 @@ kis config --quiet
 ```text
 kis-cli/
 ├── docs/
+│   ├── development-checks.md # 표준 개발 체크와 Copy Checklist
 │   ├── SPEC.md           # Rust 2-crate 기술 명세
 │   └── reference.md      # KIS API 레퍼런스
 ├── rust/
@@ -228,6 +301,22 @@ kis-cli/
 ```
 
 크레이트 경계와 모듈 책임은 `docs/SPEC.md`를 기준으로 유지합니다.
+
+## 개발 체크
+
+로컬 훅과 CI는 루트 `Makefile`의 동일한 진입점을 사용합니다. 자세한 운영 규칙과 다른 저장소로 옮길 때의 체크리스트는 `docs/development-checks.md`를 참고하세요.
+
+```bash
+make hooks-install
+make fmt
+make fmt-check
+make lint
+make test
+```
+
+- 로컬 워크플로우는 POSIX shell + `make` 기준입니다.
+- Windows에서는 Git Bash 또는 WSL 사용을 권장합니다.
+- `make hooks-install`은 repo-local Git hooks 경로를 `.githooks`로 설정합니다.
 
 ## 보안
 
@@ -238,7 +327,12 @@ kis-cli/
 ## 테스트
 
 ```bash
-cargo test --manifest-path rust/Cargo.toml
+make test
+```
+
+crate 단위로 좁혀서 확인할 때는 기존 `cargo` 명령을 그대로 사용할 수 있습니다.
+
+```bash
 cargo test --manifest-path rust/Cargo.toml -p kis-core
 cargo test --manifest-path rust/Cargo.toml -p kis-cli
 ```

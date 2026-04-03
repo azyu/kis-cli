@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-use crate::api_client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, parse_output, parse_outputs};
 
 const PATH_DAILY_ITEM_CHART: &str =
     "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
@@ -88,7 +89,12 @@ where
     let response = client
         .get_json(PATH_DAILY_ITEM_CHART, TR_ID_DAILY_ITEM_CHART, &params)
         .await?;
-    parse_output(response, "daily chart")
+    if response.get("output").is_some() {
+        return parse_output(response, "daily chart");
+    }
+
+    let (_, items): (Value, Vec<ChartItem>) = parse_outputs(response, "daily chart")?;
+    Ok(items)
 }
 
 pub async fn get_time_chart<C>(
@@ -235,6 +241,39 @@ mod tests {
         assert_eq!(call.path, PATH_DAILY_ITEM_CHART);
         assert_eq!(call.tr_id, TR_ID_DAILY_ITEM_CHART);
         assert_eq!(call.params["FID_PERIOD_DIV_CODE"], "D");
+    }
+
+    #[tokio::test]
+    async fn gets_daily_chart_from_output2_rows() {
+        let client = MockClient {
+            response: json!({
+                "rt_cd": "0",
+                "msg_cd": "MCA00000",
+                "msg1": "정상처리",
+                "output1": {
+                    "hts_kor_isnm": "삼성전자",
+                    "stck_prpr": "70000"
+                },
+                "output2": [{
+                    "stck_bsop_date": "20260306",
+                    "stck_clpr": "70000",
+                    "stck_oprc": "69000",
+                    "stck_hgpr": "70500",
+                    "stck_lwpr": "68800",
+                    "acml_vol": "12345678",
+                    "acml_tr_pbmn": "1000000000",
+                    "prdy_vrss": "1000",
+                    "prdy_vrss_sign": "2"
+                }]
+            }),
+            call: Arc::new(Mutex::new(None)),
+        };
+
+        let result = get_daily_chart(&client, "005930", "20260101", "20260306", Some("D"))
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].stck_bsop_date, "20260306");
     }
 
     #[tokio::test]

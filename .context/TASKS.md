@@ -51,6 +51,8 @@
 - [x] Rust CLI 계약 정리 1차 (`--config`/`--env` global 처리 및 parse contract 고정) — Agent: Main
 - [x] Rust 공식 진입점 승격 (`kis-rs` -> `kis`) — Agent: Main
 - [x] 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 변경 (fallback 없음) — Agent: Main
+- [x] 해외주식 시세/시장정보 2차 1차 (`dailyprice`, `inquire-asking-price`, `inquire-ccnl`) — Agent: Main
+- [x] Virtual 읽기 API triage 안정화 (`chart daily` 파싱 수정, known blocker smoke/문서 고정) — Agent: Main
 
 ## In Progress
 - [x] 작업 컨텍스트 문서 경로를 `.claude/`에서 `.context/`로 이전 — Agent: Main
@@ -67,18 +69,31 @@
 - [x] GitHub Actions 추가 (`ci`, `release-build`) — Agent: Main
 - [x] GitHub release target 확대 (`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`) — Agent: Main
 - [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
+- [x] 개발 체크 표준화 (`rust-toolchain.toml`, `Makefile`, repo hooks, CI/문서 동기화) — Agent: Main
+- [x] 해외주식 시세/시장정보 2차 잔여분 1차 (`chart` 계열) — Agent: Leader
+- [x] 해외주식 시세/시장정보 2차 잔여분 2차 1차 (`search_info/detail`) — Agent: Leader
+- [x] 해외주식 시세/시장정보 2차 잔여분 3차 1차 (`ranking`: `trade-vol`, `market-cap`) — Agent: Leader
+- [x] 해외주식 시세/시장정보 2차 잔여분 3차 2차 (`price_fluct`, `new_highlow`, `volume_surge`) — Agent: Leader
+- [x] 해외주식 시세/시장정보 2차 잔여분 2차 2차 (`inquire_search` 조건검색) — Agent: Leader
+- [x] 시간외 거래 API 2차 1차 (`overtime_fluctuation`, `overtime_volume`) — Agent: Leader
+- [x] WebSocket 실시간 시세 표면 확대 1차 (`정규장 호가/체결`) — Agent: Leader
+- [x] WebSocket 실시간 시세 표면 확대 2차 1차 (`동일 spec 다중 종목`) — Agent: Leader
+- [x] WebSocket 실시간 시세 표면 확대 2차 2차 (`mixed spec` / `mixed stream` 입력 surface) — Agent: Leader
+- [x] E2E 통합 테스트 (모의투자) 1차 (`ignored smoke harness`) — Agent: Leader
+- [x] WebSocket NDJSON 스트리밍 출력 1차 (`ws --stream`) — Agent: Leader
+- [x] 태그 push 기반 GitHub Release + Homebrew tap 자동화 구성 — Agent: Main
 
 ## Backlog
 - [x] 해외주식 주문 API 구현 — Agent: Domain
 - [x] 해외주식 잔고/체결 API 구현 — Agent: Domain
-- [ ] 시간외 거래 API 2차 (`overtime_asking_price_krx`, `overtime_fluctuation`, `overtime_volume`) — Agent: Main
-- [ ] WebSocket 실시간 시세 표면 확대 (정규장 시세/체결, 다중 구독 UX) — Agent: Core
+- [x] 시간외 거래 API 2차 (`overtime_fluctuation`, `overtime_volume`) — Agent: Main
+- [x] WebSocket 실시간 시세 표면 확대 2차 2차 (`mixed spec` / `mixed stream` 입력 surface) — Agent: Core
 - [ ] E2E 통합 테스트 (모의투자) — Agent: Quality
 - [ ] ratatui 기반 TUI (`kis tui`) 검토 및 도입 — Agent: CLI
 - [x] 해외주식 매수가능금액 조회 (`inquire_psamount`) — Agent: Main
 - [x] 시간외 REST 1차 (`inquire_overtime_price`, `inquire_overtime_asking_price`) — Agent: Main
 - [x] 해외주식 계좌 조회 2차 (`inquire_period_profit`, `inquire_period_trans`, `inquire_algo_ccnl`, `order_resv_list`, `order_resv_ccnl`) — Agent: Main
-- [ ] 해외주식 시세/시장정보 2차 (`dailyprice`, `inquire-asking-price`, chart/search/ranking 계열) — Agent: Domain
+- [x] 해외주식 시세/시장정보 2차 잔여분 (chart/search/ranking 계열) — Agent: Domain
 - [x] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Main
 - [x] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Main
 - [x] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Main

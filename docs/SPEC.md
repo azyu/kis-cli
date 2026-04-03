@@ -71,10 +71,17 @@ rust/
 
 ## Verification
 
-구조 변경 후 최소 검증 기준은 아래와 같다.
+저장소 표준 검증 진입점은 루트 `Makefile`이다.
 
 ```bash
-cargo test --manifest-path rust/Cargo.toml
+make fmt-check
+make lint
+make test
+```
+
+crate 단위로 구조 영향을 좁혀서 확인할 때는 아래 명령을 사용한다.
+
+```bash
 cargo test --manifest-path rust/Cargo.toml -p kis-core
 cargo test --manifest-path rust/Cargo.toml -p kis-cli
 ```

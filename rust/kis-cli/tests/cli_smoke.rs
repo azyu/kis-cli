@@ -3,7 +3,7 @@ use std::process::Command as ProcessCommand;
 
 use clap::Parser;
 use kis_cli::cli::{
-    BalanceArgs, BalanceCommand, Cli, Command, OrderCommand, ReservationCancelRegion,
+    BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, OrderCommand, ReservationCancelRegion,
     ReservationRegion, WsCommand,
 };
 use kis_cli::render::{render_pairs, render_table};
@@ -75,7 +75,254 @@ fn parses_quote_overtime_ask_command() {
         panic!("expected quote command");
     };
 
-    assert!(matches!(args.command, kis_cli::cli::QuoteCommand::OvertimeAsk(_)));
+    assert!(matches!(
+        args.command,
+        kis_cli::cli::QuoteCommand::OvertimeAsk(_)
+    ));
+}
+
+#[test]
+fn parses_overseas_daily_price_command() {
+    let cli =
+        Cli::try_parse_from(["kis", "price", "--exchange", "NAS", "AAPL", "--daily"]).unwrap();
+
+    let Command::Price(args) = cli.command else {
+        panic!("expected price command");
+    };
+
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    assert!(args.daily);
+}
+
+#[test]
+fn parses_overseas_daily_chart_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "chart",
+        "daily",
+        "AAPL",
+        "--exchange",
+        "NAS",
+        "--start",
+        "20260301",
+        "--end",
+        "20260306",
+    ])
+    .unwrap();
+
+    let Command::Chart(args) = cli.command else {
+        panic!("expected chart command");
+    };
+
+    let ChartCommand::Daily(args) = args.command else {
+        panic!("expected chart daily command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+}
+
+#[test]
+fn parses_overseas_time_chart_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "chart",
+        "time",
+        "AAPL",
+        "--exchange",
+        "NAS",
+        "--unit",
+        "5",
+    ])
+    .unwrap();
+
+    let Command::Chart(args) = cli.command else {
+        panic!("expected chart command");
+    };
+
+    let ChartCommand::Time(args) = args.command else {
+        panic!("expected chart time command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    assert_eq!(args.unit, "5");
+}
+
+#[test]
+fn parses_overseas_info_detail_command() {
+    let cli = Cli::try_parse_from(["kis", "info", "detail", "AAPL", "--exchange", "NAS"]).unwrap();
+
+    let Command::Info(args) = cli.command else {
+        panic!("expected info command");
+    };
+
+    let kis_cli::cli::InfoCommand::Detail(args) = args.command else {
+        panic!("expected info detail command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_info_screener_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "info",
+        "screener",
+        "--exchange",
+        "NAS",
+        "--price-start",
+        "160",
+        "--price-end",
+        "170",
+    ])
+    .unwrap();
+
+    let Command::Info(args) = cli.command else {
+        panic!("expected info command");
+    };
+
+    let kis_cli::cli::InfoCommand::Screener(args) = args.command else {
+        panic!("expected info screener command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+    assert_eq!(args.price_start.as_deref(), Some("160"));
+    assert_eq!(args.price_end.as_deref(), Some("170"));
+}
+
+#[test]
+fn parses_overseas_market_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Volume(args) = args.command else {
+        panic!("expected market volume command");
+    };
+
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
+}
+
+#[test]
+fn parses_domestic_market_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Volume(args) = args.command else {
+        panic!("expected market volume command");
+    };
+
+    assert_eq!(args.exchange, None);
+}
+
+#[test]
+fn parses_overseas_market_cap_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "cap", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::Cap(args) = args.command else {
+        panic!("expected market cap command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_market_price_fluct_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "price-fluct", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::PriceFluct(args) = args.command else {
+        panic!("expected market price-fluct command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_market_new_highlow_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "new-highlow", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::NewHighlow(args) = args.command else {
+        panic!("expected market new-highlow command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_overseas_market_volume_surge_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "volume-surge", "--exchange", "NAS"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::VolumeSurge(args) = args.command else {
+        panic!("expected market volume-surge command");
+    };
+
+    assert_eq!(args.exchange, "NAS");
+}
+
+#[test]
+fn parses_market_overtime_fluctuation_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "overtime-fluctuation"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::OvertimeFluctuation = args.command else {
+        panic!("expected market overtime-fluctuation command");
+    };
+}
+
+#[test]
+fn parses_market_overtime_volume_command() {
+    let cli = Cli::try_parse_from(["kis", "market", "overtime-volume"]).unwrap();
+
+    let Command::Market(args) = cli.command else {
+        panic!("expected market command");
+    };
+
+    let kis_cli::cli::MarketCommand::OvertimeVolume = args.command else {
+        panic!("expected market overtime-volume command");
+    };
+}
+
+#[test]
+fn parses_overseas_quote_ask_command() {
+    let cli = Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
+
+    let Command::Quote(args) = cli.command else {
+        panic!("expected quote command");
+    };
+
+    let kis_cli::cli::QuoteCommand::Ask(args) = args.command else {
+        panic!("expected quote ask command");
+    };
+
+    assert_eq!(args.stock, "AAPL");
+    assert_eq!(args.exchange.as_deref(), Some("NAS"));
 }
 
 #[test]
@@ -270,6 +517,85 @@ fn parses_ws_approval_command() {
     };
 
     assert!(matches!(args.command, WsCommand::Approval));
+}
+
+#[test]
+fn parses_ws_ask_command() {
+    let cli = Cli::try_parse_from(["kis", "ws", "ask", "005930", "--count", "2"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ask(args) = args.command else {
+        panic!("expected ws ask command");
+    };
+
+    assert_eq!(args.stocks, vec!["005930".to_string()]);
+    assert_eq!(args.count, 2);
+}
+
+#[test]
+fn parses_ws_ccnl_command() {
+    let cli = Cli::try_parse_from(["kis", "ws", "ccnl", "005930", "--reconnects", "1"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ccnl(args) = args.command else {
+        panic!("expected ws ccnl command");
+    };
+
+    assert_eq!(args.stocks, vec!["005930".to_string()]);
+    assert_eq!(args.reconnects, 1);
+}
+
+#[test]
+fn parses_ws_multi_ask_command() {
+    let cli =
+        Cli::try_parse_from(["kis", "ws", "ask", "005930", "000660", "--count", "2"]).unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Ask(args) = args.command else {
+        panic!("expected ws ask command");
+    };
+
+    assert_eq!(
+        args.stocks,
+        vec!["005930".to_string(), "000660".to_string()]
+    );
+    assert_eq!(args.count, 2);
+}
+
+#[test]
+fn parses_ws_collect_command() {
+    let cli = Cli::try_parse_from([
+        "kis",
+        "ws",
+        "collect",
+        "ask:005930",
+        "ccnl:000660",
+        "--count",
+        "2",
+    ])
+    .unwrap();
+
+    let Command::Ws(args) = cli.command else {
+        panic!("expected ws command");
+    };
+
+    let WsCommand::Collect(args) = args.command else {
+        panic!("expected ws collect command");
+    };
+
+    assert_eq!(args.requests.len(), 2);
+    assert_eq!(args.requests[0].label(), "ask:005930");
+    assert_eq!(args.requests[1].label(), "ccnl:000660");
+    assert_eq!(args.count, 2);
 }
 
 #[test]

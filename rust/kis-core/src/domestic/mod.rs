@@ -3,7 +3,7 @@ pub mod chart;
 pub mod finance;
 pub mod info;
 pub mod market;
-pub mod overtime;
 pub mod order;
+pub mod overtime;
 pub mod price;
 pub mod quote;

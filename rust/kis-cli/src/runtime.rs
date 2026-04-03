@@ -1,10 +1,10 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{
     error::Error as StdError,
     fmt::{Display, Formatter},
 };
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use kis_cli::{cli, render};
@@ -13,7 +13,9 @@ use kis_core::config::AppConfig;
 use kis_core::domestic::{balance, chart, finance, info, market, order, overtime, price, quote};
 use kis_core::error::KisError;
 use kis_core::overseas::{
-    self, balance as overseas_balance, exchange::OrderExchange, order as overseas_order,
+    balance as overseas_balance, chart as overseas_chart, exchange::OrderExchange,
+    info as overseas_info, market as overseas_market, order as overseas_order,
+    price as overseas_price, quote as overseas_quote,
 };
 use kis_core::ws as kis_ws;
 use serde::Serialize;
@@ -75,6 +77,8 @@ struct ErrorOutput {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,6 +97,7 @@ struct ClassifiedError {
     kind: &'static str,
     message: String,
     code: Option<String>,
+    details: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,6 +109,30 @@ struct ConfigOutput {
     base_url: String,
     ws_base_url: String,
     app_key: String,
+}
+
+#[derive(Debug, Serialize)]
+struct WsSymbolPayloads {
+    stock: String,
+    payloads: Vec<kis_ws::RealtimePayload>,
+}
+
+#[derive(Debug, Serialize)]
+struct WsRequestPayloads {
+    request: String,
+    kind: String,
+    stock: String,
+    payloads: Vec<kis_ws::RealtimePayload>,
+}
+
+#[derive(Debug, Serialize)]
+struct WsStreamRowOutput<'a> {
+    kind: &'a str,
+    stock: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request: Option<&'a str>,
+    tr_id: &'a str,
+    row: &'a kis_ws::RealtimeRow,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +165,7 @@ enum OverseasModifyMode {
 }
 
 pub async fn run(cli: cli::Cli, writer: &mut dyn Write) -> Result<()> {
+    validate_stream_output_contract(&cli)?;
     let runtime = initialize(&cli).await?;
 
     match cli.command {
@@ -174,17 +204,68 @@ fn resolve_config_path(cli_config: Option<&Path>) -> Result<PathBuf> {
     }
 
     let home = dirs::home_dir().context("determining home directory")?;
-    Ok(PathBuf::from(home)
-        .join(".config")
-        .join("kis")
-        .join("config.yaml"))
+    Ok(home.join(".config").join("kis").join("config.yaml"))
+}
+
+fn validate_stream_output_contract(cli: &cli::Cli) -> Result<()> {
+    if !cli.output_format().is_json() {
+        return Ok(());
+    }
+
+    if ws_stream_requested(&cli.command) {
+        return Err(validation_error(
+            "--stream cannot be used with --json or --output json",
+        ));
+    }
+
+    Ok(())
+}
+
+fn ws_stream_requested(command: &cli::Command) -> bool {
+    match command {
+        cli::Command::Ws(args) => match &args.command {
+            cli::WsCommand::Approval => false,
+            cli::WsCommand::Collect(args) => args.stream,
+            cli::WsCommand::Ask(args)
+            | cli::WsCommand::Ccnl(args)
+            | cli::WsCommand::OvertimeAsk(args)
+            | cli::WsCommand::OvertimeCcnl(args) => args.stream,
+        },
+        _ => false,
+    }
 }
 
 async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Write) -> Result<()> {
     if let Some(exchange) = args.exchange {
         let exchange = exchange.to_uppercase();
         let symbol = args.symbol.to_uppercase();
-        let price = overseas::price::get_price(&runtime.client, &exchange, &symbol).await?;
+        if args.daily {
+            let prices = overseas_price::get_daily_price(
+                &runtime.client,
+                &exchange,
+                &symbol,
+                Some(args.period.as_str()),
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &prices);
+            }
+
+            let rows = prices
+                .into_iter()
+                .map(|item| {
+                    vec![
+                        item.xymd, item.open, item.high, item.low, item.clos, item.tvol,
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let output =
+                render::render_table(&["날짜", "시가", "고가", "저가", "종가", "거래량"], &rows);
+            writeln!(writer, "{output}")?;
+            return Ok(());
+        }
+
+        let price = overseas_price::get_price(&runtime.client, &exchange, &symbol).await?;
         if runtime.output_json {
             return write_command_json(writer, runtime.command_name, &price);
         }
@@ -262,6 +343,16 @@ async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Wri
 async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Write) -> Result<()> {
     match args.command {
         cli::QuoteCommand::Ask(args) => {
+            if let Some(exchange) = args.exchange.as_deref() {
+                let ask = overseas_quote::get_asking_price(&runtime.client, exchange, &args.stock)
+                    .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &ask);
+                }
+                write_overseas_asking_price(writer, &ask)?;
+                return Ok(());
+            }
+
             let ask = quote::get_asking_price(&runtime.client, &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &ask);
@@ -291,10 +382,7 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
 
             let output = render::render_pairs(&[
                 ("종목명", display_or_dash(&item.bstp_kor_isnm)),
-                (
-                    "현재가",
-                    display_or_dash(&item.ovtm_untp_prpr),
-                ),
+                ("현재가", display_or_dash(&item.ovtm_untp_prpr)),
                 (
                     "전일대비",
                     format!(
@@ -317,7 +405,8 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
             writeln!(writer, "{output}")?;
         }
         cli::QuoteCommand::OvertimeAsk(args) => {
-            let ask = overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
+            let ask =
+                overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &ask);
             }
@@ -366,6 +455,37 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
             )?;
         }
         cli::QuoteCommand::Ccnl(args) => {
+            if let Some(exchange) = args.exchange.as_deref() {
+                let items =
+                    overseas_quote::get_conclusions(&runtime.client, exchange, &args.stock).await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            display_or_dash(&item.xhms),
+                            display_or_dash(&item.last),
+                            format!(
+                                "{} {} ({}%)",
+                                price_sign(&item.sign),
+                                display_or_dash(&item.diff),
+                                display_or_dash(&item.rate)
+                            ),
+                            display_or_dash(&item.evol),
+                            display_or_dash(&item.tvol),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &["시각", "현재가", "전일대비", "체결량", "누적거래량"],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items = quote::get_conclusions(&runtime.client, &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &items);
@@ -418,9 +538,98 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
     Ok(())
 }
 
+fn write_overseas_asking_price(
+    writer: &mut dyn Write,
+    ask: &overseas_quote::OverseasAskingPrice,
+) -> Result<()> {
+    let Some(levels) = ask.levels.first() else {
+        let output = render::render_pairs(&[
+            ("현재가", display_or_dash(&ask.quote.last)),
+            ("매도호가", display_or_dash(&ask.quote.pask)),
+            ("매수호가", display_or_dash(&ask.quote.pbid)),
+            ("거래량", display_or_dash(&ask.quote.tvol)),
+        ]);
+        writeln!(writer, "{output}")?;
+        return Ok(());
+    };
+
+    let rows = [
+        vec![
+            display_or_dash(&levels.askv5),
+            display_or_dash(&levels.askp5),
+            display_or_dash(&levels.bidp5),
+            display_or_dash(&levels.bidv5),
+        ],
+        vec![
+            display_or_dash(&levels.askv4),
+            display_or_dash(&levels.askp4),
+            display_or_dash(&levels.bidp4),
+            display_or_dash(&levels.bidv4),
+        ],
+        vec![
+            display_or_dash(&levels.askv3),
+            display_or_dash(&levels.askp3),
+            display_or_dash(&levels.bidp3),
+            display_or_dash(&levels.bidv3),
+        ],
+        vec![
+            display_or_dash(&levels.askv2),
+            display_or_dash(&levels.askp2),
+            display_or_dash(&levels.bidp2),
+            display_or_dash(&levels.bidv2),
+        ],
+        vec![
+            display_or_dash(&levels.askv1),
+            display_or_dash(&levels.askp1),
+            display_or_dash(&levels.bidp1),
+            display_or_dash(&levels.bidv1),
+        ],
+    ];
+    let table = render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows);
+    writeln!(writer, "{table}")?;
+    writeln!(
+        writer,
+        "\n현재가: {}  총매도잔량: {}  총매수잔량: {}",
+        display_or_dash(&ask.quote.last),
+        display_or_dash(&ask.summary.total_askp_rsqn),
+        display_or_dash(&ask.summary.total_bidp_rsqn),
+    )?;
+    Ok(())
+}
+
 async fn run_chart(runtime: &Runtime, args: cli::ChartArgs, writer: &mut dyn Write) -> Result<()> {
     match args.command {
         cli::ChartCommand::Daily(args) => {
+            if let Some(exchange) = args.exchange {
+                let items = overseas_chart::get_daily_chart(
+                    &runtime.client,
+                    &exchange,
+                    &args.stock,
+                    args.start.as_deref().unwrap_or(""),
+                    args.end.as_deref().unwrap_or(""),
+                    Some(args.period.as_str()),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            item.xymd, item.open, item.high, item.low, item.clos, item.tvol,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &["날짜", "시가", "고가", "저가", "종가", "거래량"],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items = chart::get_daily_chart(
                 &runtime.client,
                 &args.stock,
@@ -454,6 +663,44 @@ async fn run_chart(runtime: &Runtime, args: cli::ChartArgs, writer: &mut dyn Wri
             writeln!(writer, "{table}")?;
         }
         cli::ChartCommand::Time(args) => {
+            if let Some(exchange) = args.exchange {
+                let items = overseas_chart::get_time_chart(
+                    &runtime.client,
+                    &exchange,
+                    &args.stock,
+                    Some(args.unit.as_str()),
+                )
+                .await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &items);
+                }
+
+                let rows = items
+                    .into_iter()
+                    .map(|item| {
+                        vec![
+                            item.xymd, item.xhms, item.last, item.open, item.high, item.low,
+                            item.evol, item.tvol,
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let table = render::render_table(
+                    &[
+                        "일자",
+                        "시각",
+                        "현재가",
+                        "시가",
+                        "고가",
+                        "저가",
+                        "체결량",
+                        "누적거래량",
+                    ],
+                    &rows,
+                );
+                writeln!(writer, "{table}")?;
+                return Ok(());
+            }
+
             let items =
                 chart::get_time_chart(&runtime.client, &args.stock, Some(args.unit.as_str()))
                     .await?;
@@ -1265,6 +1512,89 @@ fn validation_error(message: impl Into<String>) -> anyhow::Error {
     ValidationError::new(message).into()
 }
 
+fn build_overseas_screener_request(
+    args: cli::OverseasScreenerArgs,
+) -> Result<overseas_info::OverseasScreenerRequest> {
+    let price = screener_range(
+        "--price-start",
+        args.price_start,
+        "--price-end",
+        args.price_end,
+    )?;
+    let rate = screener_range("--rate-start", args.rate_start, "--rate-end", args.rate_end)?;
+    let market_cap = screener_range(
+        "--market-cap-start",
+        args.market_cap_start,
+        "--market-cap-end",
+        args.market_cap_end,
+    )?;
+    let shares = screener_range(
+        "--shares-start",
+        args.shares_start,
+        "--shares-end",
+        args.shares_end,
+    )?;
+    let volume = screener_range(
+        "--volume-start",
+        args.volume_start,
+        "--volume-end",
+        args.volume_end,
+    )?;
+    let amount = screener_range(
+        "--amount-start",
+        args.amount_start,
+        "--amount-end",
+        args.amount_end,
+    )?;
+    let eps = screener_range("--eps-start", args.eps_start, "--eps-end", args.eps_end)?;
+    let per = screener_range("--per-start", args.per_start, "--per-end", args.per_end)?;
+
+    if [
+        price.as_ref(),
+        rate.as_ref(),
+        market_cap.as_ref(),
+        shares.as_ref(),
+        volume.as_ref(),
+        amount.as_ref(),
+        eps.as_ref(),
+        per.as_ref(),
+    ]
+    .iter()
+    .all(Option::is_none)
+    {
+        return Err(validation_error(
+            "info screener requires at least one filter range",
+        ));
+    }
+
+    Ok(overseas_info::OverseasScreenerRequest {
+        exchange: args.exchange,
+        price,
+        rate,
+        market_cap,
+        shares,
+        volume,
+        amount,
+        eps,
+        per,
+    })
+}
+
+fn screener_range(
+    start_flag: &str,
+    start: Option<String>,
+    end_flag: &str,
+    end: Option<String>,
+) -> Result<Option<overseas_info::RangeFilter>> {
+    match (start, end) {
+        (Some(start), Some(end)) => Ok(Some(overseas_info::RangeFilter { start, end })),
+        (None, None) => Ok(None),
+        _ => Err(validation_error(format!(
+            "{start_flag} and {end_flag} must be used together"
+        ))),
+    }
+}
+
 fn normalize_order_exchange(exchange: String) -> Result<String> {
     Ok(parse_order_exchange(&exchange)?.code().to_string())
 }
@@ -1613,9 +1943,18 @@ async fn run_balance(
                     ("재사용가능", display_or_dash(&result.sll_ruse_psbl_amt)),
                     ("해외주문가능", display_or_dash(&result.ovrs_ord_psbl_amt)),
                     ("주문가능수량", display_or_dash(&result.ord_psbl_qty)),
-                    ("최대주문가능수량", display_or_dash(&result.max_ord_psbl_qty)),
-                    ("환전후가능금액", display_or_dash(&result.echm_af_ord_psbl_amt)),
-                    ("환전후가능수량", display_or_dash(&result.echm_af_ord_psbl_qty)),
+                    (
+                        "최대주문가능수량",
+                        display_or_dash(&result.max_ord_psbl_qty),
+                    ),
+                    (
+                        "환전후가능금액",
+                        display_or_dash(&result.echm_af_ord_psbl_amt),
+                    ),
+                    (
+                        "환전후가능수량",
+                        display_or_dash(&result.echm_af_ord_psbl_qty),
+                    ),
                     ("환율", display_or_dash(&result.exrt)),
                 ]);
                 writeln!(writer, "{output}")?;
@@ -1993,7 +2332,58 @@ async fn run_market(
     writer: &mut dyn Write,
 ) -> Result<()> {
     match args.command {
-        cli::MarketCommand::Volume => {
+        cli::MarketCommand::Volume(args) => {
+            if let Some(exchange) = args.exchange {
+                let result =
+                    overseas_market::get_trade_volume_rank(&runtime.client, &exchange).await?;
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &result);
+                }
+
+                let value = serde_json::to_value(&result)?;
+                let rows = json_array(&value, "items")
+                    .iter()
+                    .filter_map(Value::as_object)
+                    .map(|row| {
+                        vec![
+                            json_cell_alias(row, &["rank"]),
+                            json_cell_alias(row, &["symb"]),
+                            json_cell_alias(row, &["name"]),
+                            json_cell_alias(row, &["last"]),
+                            json_cell_alias(row, &["diff"]),
+                            json_cell_alias(row, &["rate"]),
+                            json_cell_alias(row, &["tvol"]),
+                        ]
+                    })
+                    .collect::<Vec<_>>();
+                let summary = json_first_pairs(
+                    &value,
+                    "summary",
+                    &[
+                        ("거래소", "excd"),
+                        ("현재조회", "crec"),
+                        ("전체조회", "trec"),
+                    ],
+                );
+                write_value_sections(
+                    writer,
+                    &[(
+                        &[
+                            "순위",
+                            "종목코드",
+                            "종목명",
+                            "현재가",
+                            "대비",
+                            "등락율",
+                            "거래량",
+                        ],
+                        rows,
+                    )],
+                    &[("요약", summary)],
+                )?;
+                return Ok(());
+            }
+
             let items = market::get_volume_rank(&runtime.client).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &items);
@@ -2026,6 +2416,317 @@ async fn run_market(
                 &rows,
             );
             writeln!(writer, "{table}")?;
+        }
+        cli::MarketCommand::Cap(args) => {
+            let result =
+                overseas_market::get_market_cap_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["tomv", "mcap"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소", "excd"),
+                    ("현재조회", "crec"),
+                    ("전체조회", "trec"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "거래량",
+                        "시가총액",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::PriceFluct(args) => {
+            let result =
+                overseas_market::get_price_fluct_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["diff"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["n_base"]),
+                        json_cell_alias(row, &["n_rate"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "대비",
+                        "등락율",
+                        "거래량",
+                        "기준가",
+                        "기준대비율",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::NewHighlow(args) => {
+            let result =
+                overseas_market::get_new_highlow_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["nhgh"]),
+                        json_cell_alias(row, &["nlow"]),
+                        json_cell_alias(row, &["tvol"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "신고가",
+                        "신저가",
+                        "거래량",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::VolumeSurge(args) => {
+            let result =
+                overseas_market::get_volume_surge_rank(&runtime.client, &args.exchange).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["name", "knam"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["n_tvol"]),
+                        json_cell_alias(row, &["n_diff"]),
+                        json_cell_alias(row, &["trat", "n_rate"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[("거래소", "excd"), ("구분", "stat"), ("레코드", "nrec")],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "현재가",
+                        "등락율",
+                        "거래량",
+                        "기준거래량",
+                        "증가량",
+                        "증가율",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::OvertimeFluctuation => {
+            let result = market::get_overtime_fluctuation_rank(&runtime.client).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["mksc_shrn_iscd", "stck_shrn_iscd"]),
+                        json_cell_alias(row, &["hts_kor_isnm"]),
+                        json_cell_alias(row, &["ovtm_untp_prpr"]),
+                        format!(
+                            "{} {}",
+                            price_sign(&json_cell_alias(row, &["ovtm_untp_prdy_vrss_sign"])),
+                            json_cell_alias(row, &["ovtm_untp_prdy_vrss"])
+                        ),
+                        json_cell_alias(row, &["ovtm_untp_prdy_ctrt"]),
+                        json_cell_alias(row, &["ovtm_untp_vol"]),
+                        json_cell_alias(row, &["ovtm_vrss_acml_vol_rlim"]),
+                        json_cell_alias(row, &["stck_prpr"]),
+                        json_cell_alias(row, &["bidp", "ovtm_untp_bidp1"]),
+                        json_cell_alias(row, &["askp", "ovtm_untp_askp1"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("상한", "ovtm_untp_uplm_issu_cnt"),
+                    ("상승", "ovtm_untp_ascn_issu_cnt"),
+                    ("보합", "ovtm_untp_stnr_issu_cnt"),
+                    ("하한", "ovtm_untp_lslm_issu_cnt"),
+                    ("하락", "ovtm_untp_down_issu_cnt"),
+                    ("누적거래량", "ovtm_untp_acml_vol"),
+                    ("누적거래대금", "ovtm_untp_acml_tr_pbmn"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "시간외가",
+                        "전일대비",
+                        "등락율",
+                        "거래량",
+                        "거래량비중",
+                        "정규장가",
+                        "매수호가",
+                        "매도호가",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
+        cli::MarketCommand::OvertimeVolume => {
+            let result = market::get_overtime_volume_rank(&runtime.client).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["stck_shrn_iscd", "mksc_shrn_iscd"]),
+                        json_cell_alias(row, &["hts_kor_isnm"]),
+                        json_cell_alias(row, &["ovtm_untp_prpr"]),
+                        format!(
+                            "{} {}",
+                            price_sign(&json_cell_alias(row, &["ovtm_untp_prdy_vrss_sign"])),
+                            json_cell_alias(row, &["ovtm_untp_prdy_vrss"])
+                        ),
+                        json_cell_alias(row, &["ovtm_untp_prdy_ctrt"]),
+                        json_cell_alias(row, &["ovtm_untp_vol"]),
+                        json_cell_alias(row, &["ovtm_vrss_acml_vol_rlim"]),
+                        json_cell_alias(row, &["ovtm_untp_shnu_rsqn"]),
+                        json_cell_alias(row, &["ovtm_untp_seln_rsqn"]),
+                        json_cell_alias(row, &["stck_prpr"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소거래량", "ovtm_untp_exch_vol"),
+                    ("거래소거래대금", "ovtm_untp_exch_tr_pbmn"),
+                    ("코스닥거래량", "ovtm_untp_kosdaq_vol"),
+                    ("코스닥거래대금", "ovtm_untp_kosdaq_tr_pbmn"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "종목코드",
+                        "종목명",
+                        "시간외가",
+                        "전일대비",
+                        "등락율",
+                        "거래량",
+                        "거래량비중",
+                        "매수잔량",
+                        "매도잔량",
+                        "정규장가",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
         }
         cli::MarketCommand::Holiday(args) => {
             let items = market::get_holidays(&runtime.client, &args.date).await?;
@@ -2259,6 +2960,112 @@ async fn run_info(runtime: &Runtime, args: cli::InfoArgs, writer: &mut dyn Write
             let table = render::render_table(&["종목코드", "종목명", "영문명", "시장"], &rows);
             writeln!(writer, "{table}")?;
         }
+        cli::InfoCommand::Detail(args) => {
+            let item =
+                overseas_info::get_product_info(&runtime.client, &args.exchange, &args.stock)
+                    .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &item);
+            }
+
+            let output = render::render_pairs(&[
+                (
+                    "종목코드",
+                    display_or_dash(&json_string_alias(&item, &["pdno", "PDNO"])),
+                ),
+                (
+                    "종목명",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &["prdt_name", "PRDT_NAME", "prdt_abrv_name", "PRDT_ABRV_NAME"],
+                    )),
+                ),
+                (
+                    "영문명",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &["prdt_eng_name", "PRDT_ENG_NAME"],
+                    )),
+                ),
+                (
+                    "상품유형",
+                    display_or_dash(&json_string_alias(&item, &["prdt_type_cd", "PRDT_TYPE_CD"])),
+                ),
+                (
+                    "거래소",
+                    display_or_dash(&json_string_alias(
+                        &item,
+                        &[
+                            "ovrs_excg_cd",
+                            "OVRS_EXCG_CD",
+                            "excg_dvsn_cd",
+                            "EXCG_DVSN_CD",
+                        ],
+                    )),
+                ),
+                (
+                    "통화",
+                    display_or_dash(&json_string_alias(&item, &["tr_crcy_cd", "TR_CRCY_CD"])),
+                ),
+            ]);
+            writeln!(writer, "{output}")?;
+        }
+        cli::InfoCommand::Screener(args) => {
+            let request = build_overseas_screener_request(*args)?;
+            let result = overseas_info::inquire_search(&runtime.client, &request).await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &result);
+            }
+
+            let value = serde_json::to_value(&result)?;
+            let rows = json_array(&value, "items")
+                .iter()
+                .filter_map(Value::as_object)
+                .map(|row| {
+                    vec![
+                        json_cell_alias(row, &["rank"]),
+                        json_cell_alias(row, &["symb"]),
+                        json_cell_alias(row, &["last"]),
+                        json_cell_alias(row, &["diff"]),
+                        json_cell_alias(row, &["rate"]),
+                        json_cell_alias(row, &["tvol"]),
+                        json_cell_alias(row, &["valx"]),
+                        json_cell_alias(row, &["eps"]),
+                        json_cell_alias(row, &["per"]),
+                        json_cell_alias(row, &["e_ordyn"]),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let summary = json_first_pairs(
+                &value,
+                "summary",
+                &[
+                    ("거래소", "excd"),
+                    ("현재조회", "crec"),
+                    ("전체조회", "trec"),
+                    ("레코드", "nrec"),
+                ],
+            );
+            write_value_sections(
+                writer,
+                &[(
+                    &[
+                        "순위",
+                        "종목코드",
+                        "현재가",
+                        "대비",
+                        "등락율",
+                        "거래량",
+                        "시가총액",
+                        "EPS",
+                        "PER",
+                        "매매가능",
+                    ],
+                    rows,
+                )],
+                &[("요약", summary)],
+            )?;
+        }
     }
 
     Ok(())
@@ -2276,36 +3083,378 @@ async fn run_ws(runtime: &Runtime, args: cli::WsArgs, writer: &mut dyn Write) ->
                 render::render_pairs(&[("approval_key", display_or_dash(&approval.approval_key))]);
             writeln!(writer, "{output}")?;
         }
-        cli::WsCommand::OvertimeAsk(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_overtime_asking_price_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+        cli::WsCommand::Collect(args) => {
+            let requests = collect_ws_requests(runtime, &args).await?;
+            if args.stream {
+                return write_ws_request_stream_payloads(writer, &requests);
             }
-            write_ws_overtime_ask(writer, &payloads)?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &requests);
+            }
+            write_ws_request_payloads(writer, &requests)?;
+        }
+        cli::WsCommand::Ask(args) => {
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_asking_price_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(writer, "ask", stock, None, &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_ask(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_asking_price_spec(),
+                    &args,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "ask", &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_ask)?;
+            }
+        }
+        cli::WsCommand::Ccnl(args) => {
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_ccnl_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(writer, "ccnl", stock, None, &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_ccnl(writer, &payloads)?;
+            } else {
+                let payloads =
+                    collect_ws_symbol_payloads(runtime, kis_ws::domestic_ccnl_spec(), &args)
+                        .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "ccnl", &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_ccnl)?;
+            }
+        }
+        cli::WsCommand::OvertimeAsk(args) => {
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_overtime_asking_price_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(
+                        writer,
+                        "overtime-ask",
+                        stock,
+                        None,
+                        &payloads,
+                    );
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_overtime_ask(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_overtime_asking_price_spec(),
+                    &args,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "overtime-ask", &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_overtime_ask)?;
+            }
         }
         cli::WsCommand::OvertimeCcnl(args) => {
-            let payloads = kis_ws::collect_realtime_messages(
-                &runtime.config,
-                kis_ws::domestic_overtime_ccnl_spec(),
-                &args.stock,
-                args.count,
-                Duration::from_secs(args.timeout_secs),
-                args.reconnects,
-            )
-            .await?;
-            if runtime.output_json {
-                return write_command_json(writer, runtime.command_name, &payloads);
+            if let [stock] = args.stocks.as_slice() {
+                let payloads = kis_ws::collect_realtime_messages(
+                    &runtime.config,
+                    kis_ws::domestic_overtime_ccnl_spec(),
+                    stock,
+                    args.count,
+                    Duration::from_secs(args.timeout_secs),
+                    args.reconnects,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_stream_payloads(
+                        writer,
+                        "overtime-ccnl",
+                        stock,
+                        None,
+                        &payloads,
+                    );
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_overtime_ccnl(writer, &payloads)?;
+            } else {
+                let payloads = collect_ws_symbol_payloads(
+                    runtime,
+                    kis_ws::domestic_overtime_ccnl_spec(),
+                    &args,
+                )
+                .await?;
+                if args.stream {
+                    return write_ws_symbol_stream_payloads(writer, "overtime-ccnl", &payloads);
+                }
+                if runtime.output_json {
+                    return write_command_json(writer, runtime.command_name, &payloads);
+                }
+                write_ws_symbol_payloads(writer, &payloads, write_ws_overtime_ccnl)?;
             }
-            write_ws_overtime_ccnl(writer, &payloads)?;
         }
+    }
+
+    Ok(())
+}
+
+async fn collect_ws_requests(
+    runtime: &Runtime,
+    args: &cli::WsCollectArgs,
+) -> Result<Vec<WsRequestPayloads>> {
+    let approval = kis_ws::fetch_approval_key(&runtime.config).await?;
+    let mut requests = Vec::with_capacity(args.requests.len());
+
+    for request in &args.requests {
+        let payloads = kis_ws::collect_realtime_messages_with_approval_key(
+            &runtime.config,
+            &approval.approval_key,
+            ws_collect_spec(request.kind),
+            &request.stock,
+            args.count,
+            Duration::from_secs(args.timeout_secs),
+            args.reconnects,
+        )
+        .await?;
+        requests.push(WsRequestPayloads {
+            request: request.label(),
+            kind: request.kind.as_str().to_string(),
+            stock: request.stock.clone(),
+            payloads,
+        });
+    }
+
+    Ok(requests)
+}
+
+async fn collect_ws_symbol_payloads(
+    runtime: &Runtime,
+    spec: kis_ws::RealtimeSpec,
+    args: &cli::WsStreamArgs,
+) -> Result<Vec<WsSymbolPayloads>> {
+    let approval = kis_ws::fetch_approval_key(&runtime.config).await?;
+    let mut streams = Vec::with_capacity(args.stocks.len());
+
+    for stock in &args.stocks {
+        let payloads = kis_ws::collect_realtime_messages_with_approval_key(
+            &runtime.config,
+            &approval.approval_key,
+            spec,
+            stock,
+            args.count,
+            Duration::from_secs(args.timeout_secs),
+            args.reconnects,
+        )
+        .await?;
+        streams.push(WsSymbolPayloads {
+            stock: stock.clone(),
+            payloads,
+        });
+    }
+
+    Ok(streams)
+}
+
+fn ws_collect_spec(kind: cli::WsCollectKind) -> kis_ws::RealtimeSpec {
+    match kind {
+        cli::WsCollectKind::Ask => kis_ws::domestic_asking_price_spec(),
+        cli::WsCollectKind::Ccnl => kis_ws::domestic_ccnl_spec(),
+        cli::WsCollectKind::OvertimeAsk => kis_ws::domestic_overtime_asking_price_spec(),
+        cli::WsCollectKind::OvertimeCcnl => kis_ws::domestic_overtime_ccnl_spec(),
+    }
+}
+
+fn write_ws_request_payloads(writer: &mut dyn Write, requests: &[WsRequestPayloads]) -> Result<()> {
+    if requests.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    for (index, request) in requests.iter().enumerate() {
+        if index > 0 {
+            writeln!(writer)?;
+        }
+        writeln!(writer, "요청: {}", request.request)?;
+        match request.kind.as_str() {
+            "ask" => write_ws_ask(writer, &request.payloads)?,
+            "ccnl" => write_ws_ccnl(writer, &request.payloads)?,
+            "overtime-ask" => write_ws_overtime_ask(writer, &request.payloads)?,
+            "overtime-ccnl" => write_ws_overtime_ccnl(writer, &request.payloads)?,
+            _ => unreachable!("validated ws collect kind"),
+        }
+    }
+
+    Ok(())
+}
+
+fn write_ws_request_stream_payloads(
+    writer: &mut dyn Write,
+    requests: &[WsRequestPayloads],
+) -> Result<()> {
+    for request in requests {
+        write_ws_stream_payloads(
+            writer,
+            &request.kind,
+            &request.stock,
+            Some(request.request.as_str()),
+            &request.payloads,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_symbol_payloads(
+    writer: &mut dyn Write,
+    streams: &[WsSymbolPayloads],
+    write_payloads: fn(&mut dyn Write, &[kis_ws::RealtimePayload]) -> Result<()>,
+) -> Result<()> {
+    if streams.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    for (index, stream) in streams.iter().enumerate() {
+        if index > 0 {
+            writeln!(writer)?;
+        }
+        writeln!(writer, "종목: {}", stream.stock)?;
+        write_payloads(writer, &stream.payloads)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_symbol_stream_payloads(
+    writer: &mut dyn Write,
+    kind: &str,
+    streams: &[WsSymbolPayloads],
+) -> Result<()> {
+    for stream in streams {
+        write_ws_stream_payloads(writer, kind, &stream.stock, None, &stream.payloads)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_stream_payloads(
+    writer: &mut dyn Write,
+    kind: &str,
+    stock: &str,
+    request: Option<&str>,
+    payloads: &[kis_ws::RealtimePayload],
+) -> Result<()> {
+    for payload in payloads {
+        write_ws_stream_payload(writer, kind, stock, request, payload)?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_stream_payload(
+    writer: &mut dyn Write,
+    kind: &str,
+    stock: &str,
+    request: Option<&str>,
+    payload: &kis_ws::RealtimePayload,
+) -> Result<()> {
+    for row in &payload.rows {
+        serde_json::to_writer(
+            &mut *writer,
+            &WsStreamRowOutput {
+                kind,
+                stock,
+                request,
+                tr_id: &payload.tr_id,
+                row,
+            },
+        )?;
+        writeln!(writer)?;
+        writer.flush()?;
+    }
+
+    Ok(())
+}
+
+fn write_ws_ask(writer: &mut dyn Write, payloads: &[kis_ws::RealtimePayload]) -> Result<()> {
+    let mut wrote_any = false;
+
+    for (index, payload) in payloads.iter().enumerate() {
+        for row in &payload.rows {
+            if wrote_any {
+                writeln!(writer)?;
+            }
+            if payloads.len() > 1 {
+                writeln!(writer, "message {}", index + 1)?;
+            }
+            writeln!(
+                writer,
+                "{}",
+                render::render_table(
+                    &["매도잔량", "매도호가", "매수호가", "매수잔량"],
+                    &realtime_orderbook_rows(row, 10),
+                )
+            )?;
+            writeln!(
+                writer,
+                "\n시각: {}  총매도잔량: {}  총매수잔량: {}  예상체결가: {}  매매구분: {}",
+                realtime_cell(row, "bsop_hour"),
+                realtime_cell(row, "total_askp_rsqn"),
+                realtime_cell(row, "total_bidp_rsqn"),
+                realtime_cell(row, "antc_cnpr"),
+                realtime_cell(row, "stck_deal_cls_code"),
+            )?;
+            wrote_any = true;
+        }
+    }
+
+    if !wrote_any {
+        writeln!(writer, "데이터가 없습니다.")?;
     }
 
     Ok(())
@@ -2325,42 +3474,13 @@ fn write_ws_overtime_ask(
             if payloads.len() > 1 {
                 writeln!(writer, "message {}", index + 1)?;
             }
-            let rows = [
-                vec![
-                    realtime_cell(row, "askp_rsqn5"),
-                    realtime_cell(row, "askp5"),
-                    realtime_cell(row, "bidp5"),
-                    realtime_cell(row, "bidp_rsqn5"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn4"),
-                    realtime_cell(row, "askp4"),
-                    realtime_cell(row, "bidp4"),
-                    realtime_cell(row, "bidp_rsqn4"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn3"),
-                    realtime_cell(row, "askp3"),
-                    realtime_cell(row, "bidp3"),
-                    realtime_cell(row, "bidp_rsqn3"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn2"),
-                    realtime_cell(row, "askp2"),
-                    realtime_cell(row, "bidp2"),
-                    realtime_cell(row, "bidp_rsqn2"),
-                ],
-                vec![
-                    realtime_cell(row, "askp_rsqn1"),
-                    realtime_cell(row, "askp1"),
-                    realtime_cell(row, "bidp1"),
-                    realtime_cell(row, "bidp_rsqn1"),
-                ],
-            ];
             writeln!(
                 writer,
                 "{}",
-                render::render_table(&["매도잔량", "매도호가", "매수호가", "매수잔량"], &rows)
+                render::render_table(
+                    &["매도잔량", "매도호가", "매수호가", "매수잔량"],
+                    &realtime_orderbook_rows(row, 5),
+                )
             )?;
             writeln!(
                 writer,
@@ -2377,6 +3497,63 @@ fn write_ws_overtime_ask(
     if !wrote_any {
         writeln!(writer, "데이터가 없습니다.")?;
     }
+
+    Ok(())
+}
+
+fn write_ws_ccnl(writer: &mut dyn Write, payloads: &[kis_ws::RealtimePayload]) -> Result<()> {
+    let rows = payloads
+        .iter()
+        .flat_map(|payload| payload.rows.iter())
+        .map(|row| {
+            vec![
+                realtime_cell(row, "stck_cntg_hour"),
+                realtime_cell(row, "stck_prpr"),
+                format!(
+                    "{} {} ({}%)",
+                    price_sign(&realtime_cell(row, "prdy_vrss_sign")),
+                    realtime_cell(row, "prdy_vrss"),
+                    realtime_cell(row, "prdy_ctrt")
+                ),
+                realtime_cell(row, "cntg_vol"),
+                realtime_cell(row, "acml_vol"),
+                realtime_cell(row, "ccld_dvsn"),
+                realtime_cell(row, "cttr"),
+                realtime_cell(row, "askp1"),
+                realtime_cell(row, "bidp1"),
+                realtime_cell(row, "hour_cls_code"),
+                realtime_cell(row, "mrkt_trtm_cls_code"),
+                realtime_cell(row, "vi_stnd_prc"),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    if rows.is_empty() {
+        writeln!(writer, "데이터가 없습니다.")?;
+        return Ok(());
+    }
+
+    writeln!(
+        writer,
+        "{}",
+        render::render_table(
+            &[
+                "시각",
+                "현재가",
+                "전일대비",
+                "체결량",
+                "누적거래량",
+                "체결구분",
+                "체결강도",
+                "매도1",
+                "매수1",
+                "시간구분",
+                "장구분",
+                "VI기준가",
+            ],
+            &rows,
+        )
+    )?;
 
     Ok(())
 }
@@ -2704,6 +3881,21 @@ fn json_cell(row: &serde_json::Map<String, Value>, field: &str) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
+fn json_cell_alias(row: &serde_json::Map<String, Value>, fields: &[&str]) -> String {
+    fields
+        .iter()
+        .find_map(|field| row.get(*field))
+        .map(|value| match value {
+            Value::Null => "-".to_string(),
+            Value::String(value) if value.is_empty() => "-".to_string(),
+            Value::String(value) => value.to_string(),
+            Value::Number(value) => value.to_string(),
+            Value::Bool(value) => value.to_string(),
+            _ => value.to_string(),
+        })
+        .unwrap_or_else(|| "-".to_string())
+}
+
 fn realtime_cell(row: &kis_ws::RealtimeRow, field: &str) -> String {
     row.get(field)
         .map(|value| {
@@ -2714,6 +3906,20 @@ fn realtime_cell(row: &kis_ws::RealtimeRow, field: &str) -> String {
             }
         })
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn realtime_orderbook_rows(row: &kis_ws::RealtimeRow, highest_level: usize) -> Vec<Vec<String>> {
+    (1..=highest_level)
+        .rev()
+        .map(|level| {
+            vec![
+                realtime_cell(row, &format!("askp_rsqn{level}")),
+                realtime_cell(row, &format!("askp{level}")),
+                realtime_cell(row, &format!("bidp{level}")),
+                realtime_cell(row, &format!("bidp_rsqn{level}")),
+            ]
+        })
+        .collect()
 }
 
 fn write_command_json<T>(writer: &mut dyn Write, command: &str, value: &T) -> Result<()>
@@ -2741,6 +3947,7 @@ pub fn write_json_error(writer: &mut dyn Write, command: &str, err: &anyhow::Err
                 kind: classified.kind,
                 message: classified.message,
                 code: classified.code,
+                details: classified.details,
             },
         },
     )
@@ -2753,6 +3960,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                 kind: "validation",
                 message: validation.to_string(),
                 code: None,
+                details: None,
             };
         }
 
@@ -2763,6 +3971,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "api",
                         message: message.clone(),
                         code: Some(code.clone()),
+                        details: None,
                     };
                 }
                 KisError::Config(message) => {
@@ -2770,6 +3979,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: message.clone(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Yaml(error) => {
@@ -2777,6 +3987,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: error.to_string(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Io(error) if err.to_string().contains("loading config") => {
@@ -2784,14 +3995,11 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: error.to_string(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Io(_) | KisError::Http(_) | KisError::Json(_) | KisError::Parse(_) => {
-                    return ClassifiedError {
-                        kind: "runtime",
-                        message: err.to_string(),
-                        code: None,
-                    };
+                    return classify_non_api_error(err, "runtime");
                 }
             }
         }
@@ -2802,10 +4010,99 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
     } else {
         "runtime"
     };
+    classify_non_api_error(err, kind)
+}
+
+fn classify_non_api_error(err: &anyhow::Error, default_kind: &'static str) -> ClassifiedError {
+    let chain = err
+        .chain()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+    let message = chain
+        .last()
+        .map(|message| normalize_runtime_message(message))
+        .unwrap_or_else(|| normalize_runtime_message(&err.to_string()));
+    let details = match chain.len() {
+        0 | 1 => None,
+        _ => Some(chain.join("\ncaused by: ")),
+    };
+
+    if let Some((code, api_message)) = extract_api_code_and_message(&message) {
+        return ClassifiedError {
+            kind: "api",
+            message: api_message,
+            code: Some(code),
+            details,
+        };
+    }
+
+    if let Some((code, api_message)) = extract_api_error_from_http_body(&message) {
+        return ClassifiedError {
+            kind: "api",
+            message: api_message,
+            code: Some(code),
+            details,
+        };
+    }
+
+    let code = extract_http_status_code(&message);
     ClassifiedError {
-        kind,
-        message: err.to_string(),
-        code: None,
+        kind: default_kind,
+        message,
+        code,
+        details,
+    }
+}
+
+fn normalize_runtime_message(message: &str) -> String {
+    message
+        .strip_prefix("parse error: ")
+        .unwrap_or(message)
+        .to_string()
+}
+
+fn extract_api_code_and_message(message: &str) -> Option<(String, String)> {
+    let start = message.find('[')?;
+    let rest = &message[start + 1..];
+    let end_rel = rest.find(']')?;
+    let code = &rest[..end_rel];
+    if code.is_empty()
+        || !code
+            .chars()
+            .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())
+    {
+        return None;
+    }
+    let tail = rest[end_rel + 1..].trim();
+    if tail.is_empty() {
+        return None;
+    }
+    Some((code.to_string(), tail.to_string()))
+}
+
+fn extract_api_error_from_http_body(message: &str) -> Option<(String, String)> {
+    let json_start = message.find('{')?;
+    let json_body = &message[json_start..];
+    let value: Value = serde_json::from_str(json_body).ok()?;
+    let code = value.get("msg_cd")?.as_str()?.to_string();
+    let api_message = value.get("msg1")?.as_str()?.to_string();
+    if code.is_empty() || api_message.is_empty() {
+        return None;
+    }
+    Some((code, api_message))
+}
+
+fn extract_http_status_code(message: &str) -> Option<String> {
+    let needle = "status ";
+    let start = message.find(needle)? + needle.len();
+    let digits = message[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if digits.len() == 3 {
+        Some(format!("HTTP_{digits}"))
+    } else {
+        None
     }
 }
 
@@ -2854,14 +4151,17 @@ fn yn_to_mark(value: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use clap::Parser;
     use kis_core::config::{AppConfig, Environment};
     use serde_json::json;
 
     use super::{
-        KisError, OverseasModifyMode, OverseasPlaceMode, classify_error, config_output,
-        display_or_dash, mask_app_key, order_output, overseas_modify_mode, overseas_place_mode,
-        price_sign, reserve_order_output, validation_error, write_command_json, write_json_error,
-        write_json_raw, yn_to_mark,
+        KisError, OverseasModifyMode, OverseasPlaceMode, WsRequestPayloads, WsSymbolPayloads,
+        build_overseas_screener_request, classify_error, config_output, display_or_dash,
+        mask_app_key, order_output, overseas_modify_mode, overseas_place_mode, price_sign,
+        reserve_order_output, validate_stream_output_contract, validation_error,
+        write_command_json, write_json_error, write_json_raw, write_ws_ask, write_ws_ccnl,
+        write_ws_request_payloads, write_ws_stream_payload, write_ws_symbol_payloads, yn_to_mark,
     };
 
     #[test]
@@ -3011,6 +4311,87 @@ mod tests {
     }
 
     #[test]
+    fn builds_overseas_screener_request() {
+        let request = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: Some("160".to_string()),
+            price_end: Some("170".to_string()),
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: Some("1000000".to_string()),
+            volume_end: Some("90000000".to_string()),
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap();
+
+        assert_eq!(request.exchange, "NAS");
+        assert_eq!(request.price.unwrap().start, "160");
+        assert_eq!(request.volume.unwrap().end, "90000000");
+    }
+
+    #[test]
+    fn rejects_partial_overseas_screener_range() {
+        let err = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: Some("160".to_string()),
+            price_end: None,
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: None,
+            volume_end: None,
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("--price-start"));
+        assert!(err.to_string().contains("--price-end"));
+    }
+
+    #[test]
+    fn rejects_empty_overseas_screener_request() {
+        let err = build_overseas_screener_request(kis_cli::cli::OverseasScreenerArgs {
+            exchange: "NAS".to_string(),
+            price_start: None,
+            price_end: None,
+            rate_start: None,
+            rate_end: None,
+            market_cap_start: None,
+            market_cap_end: None,
+            shares_start: None,
+            shares_end: None,
+            volume_start: None,
+            volume_end: None,
+            amount_start: None,
+            amount_end: None,
+            eps_start: None,
+            eps_end: None,
+            per_start: None,
+            per_end: None,
+        })
+        .unwrap_err();
+
+        assert!(err.to_string().contains("at least one filter range"));
+    }
+
+    #[test]
     fn writes_pretty_json_with_trailing_newline() {
         let mut writer = Vec::new();
         write_json_raw(&mut writer, &json!({ "status": "ok" })).unwrap();
@@ -3044,6 +4425,62 @@ mod tests {
         assert_eq!(classified.kind, "validation");
         assert_eq!(classified.message, "--price is required");
         assert_eq!(classified.code, None);
+        assert_eq!(classified.details, None);
+    }
+
+    #[test]
+    fn classifies_wrapped_api_errors_with_code_and_details() {
+        let err = anyhow::anyhow!("news API error: [OPSQ0002] 없는 서비스 코드 입니다")
+            .context("GET /uapi/domestic-stock/v1/quotations/news-title (FHKST01010800)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "api");
+        assert_eq!(classified.code.as_deref(), Some("OPSQ0002"));
+        assert_eq!(classified.message, "없는 서비스 코드 입니다");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("news-title"))
+        );
+    }
+
+    #[test]
+    fn classifies_http_status_runtime_errors_with_status_code_and_details() {
+        let err = anyhow::Error::new(KisError::Parse(
+            "API returned status 404 Not Found:".to_string(),
+        ))
+        .context("GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "runtime");
+        assert_eq!(classified.code.as_deref(), Some("HTTP_404"));
+        assert_eq!(classified.message, "API returned status 404 Not Found:");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("inquire-asking-price"))
+        );
+    }
+
+    #[test]
+    fn classifies_http_json_api_errors_with_code_and_details() {
+        let err = anyhow::Error::new(KisError::Parse(
+            r#"API returned status 500 Internal Server Error: {"rt_cd":"1","msg_cd":"EGW2004","msg1":"모의투자 TR 이 아닙니다."}"#.to_string(),
+        ))
+        .context("GET /uapi/overseas-price/v1/quotations/search-info (CTPF1702R)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "api");
+        assert_eq!(classified.code.as_deref(), Some("EGW2004"));
+        assert_eq!(classified.message, "모의투자 TR 이 아닙니다.");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("search-info"))
+        );
     }
 
     #[test]
@@ -3068,5 +4505,302 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn writes_json_error_with_details_for_wrapped_runtime_errors() {
+        let mut writer = Vec::new();
+        let err = anyhow::Error::new(KisError::Parse(
+            "API returned status 404 Not Found:".to_string(),
+        ))
+        .context("GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)");
+
+        write_json_error(&mut writer, "quote", &err).unwrap();
+
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&writer).unwrap(),
+            json!({
+                "ok": false,
+                "command": "quote",
+                "error": {
+                    "kind": "runtime",
+                    "message": "API returned status 404 Not Found:",
+                    "code": "HTTP_404",
+                    "details": "GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)\ncaused by: parse error: API returned status 404 Not Found:"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn writes_regular_ws_ask_output() {
+        let payloads = vec![kis_core::ws::RealtimePayload {
+            tr_id: "H0STASP0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("bsop_hour".to_string(), "090001".to_string()),
+                ("askp10".to_string(), "70100".to_string()),
+                ("askp_rsqn10".to_string(), "10".to_string()),
+                ("bidp10".to_string(), "69910".to_string()),
+                ("bidp_rsqn10".to_string(), "20".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+                ("askp_rsqn1".to_string(), "30".to_string()),
+                ("bidp1".to_string(), "70000".to_string()),
+                ("bidp_rsqn1".to_string(), "40".to_string()),
+                ("total_askp_rsqn".to_string(), "1000".to_string()),
+                ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                ("antc_cnpr".to_string(), "70000".to_string()),
+                ("stck_deal_cls_code".to_string(), "1".to_string()),
+            ])],
+        }];
+
+        let mut writer = Vec::new();
+        write_ws_ask(&mut writer, &payloads).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("70100"));
+        assert!(output.contains("70010"));
+        assert!(output.contains("매매구분: 1"));
+        assert!(output.contains("총매도잔량: 1000"));
+    }
+
+    #[test]
+    fn writes_regular_ws_ccnl_output() {
+        let payloads = vec![kis_core::ws::RealtimePayload {
+            tr_id: "H0STCNT0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("stck_cntg_hour".to_string(), "090001".to_string()),
+                ("stck_prpr".to_string(), "70000".to_string()),
+                ("prdy_vrss_sign".to_string(), "2".to_string()),
+                ("prdy_vrss".to_string(), "500".to_string()),
+                ("prdy_ctrt".to_string(), "0.72".to_string()),
+                ("cntg_vol".to_string(), "100".to_string()),
+                ("acml_vol".to_string(), "1000".to_string()),
+                ("ccld_dvsn".to_string(), "1".to_string()),
+                ("cttr".to_string(), "120.0".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+                ("bidp1".to_string(), "70000".to_string()),
+                ("hour_cls_code".to_string(), "0".to_string()),
+                ("mrkt_trtm_cls_code".to_string(), "1".to_string()),
+                ("vi_stnd_prc".to_string(), "68000".to_string()),
+            ])],
+        }];
+
+        let mut writer = Vec::new();
+        write_ws_ccnl(&mut writer, &payloads).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("체결구분"));
+        assert!(output.contains("VI기준가"));
+        assert!(output.contains("68000"));
+        assert!(output.contains("+ 500 (0.72%)"));
+    }
+
+    #[test]
+    fn writes_multi_ws_symbol_output_with_headers() {
+        let streams = vec![
+            WsSymbolPayloads {
+                stock: "005930".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090001".to_string()),
+                        ("askp1".to_string(), "70010".to_string()),
+                        ("askp_rsqn1".to_string(), "30".to_string()),
+                        ("bidp1".to_string(), "70000".to_string()),
+                        ("bidp_rsqn1".to_string(), "40".to_string()),
+                        ("total_askp_rsqn".to_string(), "1000".to_string()),
+                        ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                        ("antc_cnpr".to_string(), "70000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+            WsSymbolPayloads {
+                stock: "000660".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090002".to_string()),
+                        ("askp1".to_string(), "180100".to_string()),
+                        ("askp_rsqn1".to_string(), "10".to_string()),
+                        ("bidp1".to_string(), "180000".to_string()),
+                        ("bidp_rsqn1".to_string(), "20".to_string()),
+                        ("total_askp_rsqn".to_string(), "300".to_string()),
+                        ("total_bidp_rsqn".to_string(), "400".to_string()),
+                        ("antc_cnpr".to_string(), "180000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+        ];
+
+        let mut writer = Vec::new();
+        write_ws_symbol_payloads(&mut writer, &streams, write_ws_ask).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("종목: 005930"));
+        assert!(output.contains("종목: 000660"));
+        assert!(output.contains("180100"));
+    }
+
+    #[test]
+    fn writes_mixed_ws_request_output_with_headers() {
+        let requests = vec![
+            WsRequestPayloads {
+                request: "ask:005930".to_string(),
+                kind: "ask".to_string(),
+                stock: "005930".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STASP0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("bsop_hour".to_string(), "090001".to_string()),
+                        ("askp1".to_string(), "70010".to_string()),
+                        ("askp_rsqn1".to_string(), "30".to_string()),
+                        ("bidp1".to_string(), "70000".to_string()),
+                        ("bidp_rsqn1".to_string(), "40".to_string()),
+                        ("total_askp_rsqn".to_string(), "1000".to_string()),
+                        ("total_bidp_rsqn".to_string(), "2000".to_string()),
+                        ("antc_cnpr".to_string(), "70000".to_string()),
+                        ("stck_deal_cls_code".to_string(), "1".to_string()),
+                    ])],
+                }],
+            },
+            WsRequestPayloads {
+                request: "ccnl:000660".to_string(),
+                kind: "ccnl".to_string(),
+                stock: "000660".to_string(),
+                payloads: vec![kis_core::ws::RealtimePayload {
+                    tr_id: "H0STCNT0".to_string(),
+                    rows: vec![kis_core::ws::RealtimeRow::from([
+                        ("stck_cntg_hour".to_string(), "090002".to_string()),
+                        ("stck_prpr".to_string(), "180000".to_string()),
+                        ("prdy_vrss_sign".to_string(), "2".to_string()),
+                        ("prdy_vrss".to_string(), "1000".to_string()),
+                        ("prdy_ctrt".to_string(), "0.56".to_string()),
+                        ("cntg_vol".to_string(), "10".to_string()),
+                        ("acml_vol".to_string(), "100".to_string()),
+                        ("ccld_dvsn".to_string(), "1".to_string()),
+                        ("cttr".to_string(), "110.0".to_string()),
+                        ("askp1".to_string(), "180100".to_string()),
+                        ("bidp1".to_string(), "180000".to_string()),
+                        ("hour_cls_code".to_string(), "0".to_string()),
+                        ("mrkt_trtm_cls_code".to_string(), "1".to_string()),
+                        ("vi_stnd_prc".to_string(), "175000".to_string()),
+                    ])],
+                }],
+            },
+        ];
+
+        let mut writer = Vec::new();
+        write_ws_request_payloads(&mut writer, &requests).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+
+        assert!(output.contains("요청: ask:005930"));
+        assert!(output.contains("요청: ccnl:000660"));
+        assert!(output.contains("70010"));
+        assert!(output.contains("VI기준가"));
+    }
+
+    #[test]
+    fn rejects_ws_stream_with_global_json_alias() {
+        let cli =
+            kis_cli::cli::Cli::try_parse_from(["kis", "--json", "ws", "ask", "005930", "--stream"])
+                .unwrap();
+
+        let err = validate_stream_output_contract(&cli).unwrap_err();
+        assert!(err.to_string().contains("--stream"));
+        assert!(err.to_string().contains("--json"));
+    }
+
+    #[test]
+    fn rejects_ws_stream_with_global_json_output() {
+        let cli = kis_cli::cli::Cli::try_parse_from([
+            "kis",
+            "--output",
+            "json",
+            "ws",
+            "collect",
+            "ask:005930",
+            "--stream",
+        ])
+        .unwrap();
+
+        let err = validate_stream_output_contract(&cli).unwrap_err();
+        assert!(err.to_string().contains("--stream"));
+        assert!(err.to_string().contains("--output json"));
+    }
+
+    #[test]
+    fn allows_non_stream_ws_with_global_json_output() {
+        let cli = kis_cli::cli::Cli::try_parse_from(["kis", "--json", "ws", "approval"]).unwrap();
+        validate_stream_output_contract(&cli).unwrap();
+    }
+
+    #[test]
+    fn writes_ws_stream_payload_as_ndjson_rows() {
+        let payload = kis_core::ws::RealtimePayload {
+            tr_id: "H0STCNT0".to_string(),
+            rows: vec![
+                kis_core::ws::RealtimeRow::from([
+                    ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                    ("stck_cntg_hour".to_string(), "090001".to_string()),
+                    ("stck_prpr".to_string(), "70000".to_string()),
+                ]),
+                kis_core::ws::RealtimeRow::from([
+                    ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                    ("stck_cntg_hour".to_string(), "090002".to_string()),
+                    ("stck_prpr".to_string(), "70100".to_string()),
+                ]),
+            ],
+        };
+
+        let mut writer = Vec::new();
+        write_ws_stream_payload(&mut writer, "ccnl", "005930", None, &payload).unwrap();
+
+        let lines = String::from_utf8(writer)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[0],
+            json!({
+                "kind": "ccnl",
+                "stock": "005930",
+                "tr_id": "H0STCNT0",
+                "row": {
+                    "mksc_shrn_iscd": "005930",
+                    "stck_cntg_hour": "090001",
+                    "stck_prpr": "70000"
+                }
+            })
+        );
+        assert_eq!(lines[1]["row"]["stck_cntg_hour"], "090002");
+        assert!(lines[0].get("request").is_none());
+    }
+
+    #[test]
+    fn writes_ws_stream_payload_request_when_present() {
+        let payload = kis_core::ws::RealtimePayload {
+            tr_id: "H0STASP0".to_string(),
+            rows: vec![kis_core::ws::RealtimeRow::from([
+                ("mksc_shrn_iscd".to_string(), "005930".to_string()),
+                ("bsop_hour".to_string(), "090001".to_string()),
+                ("askp1".to_string(), "70010".to_string()),
+            ])],
+        };
+
+        let mut writer = Vec::new();
+        write_ws_stream_payload(&mut writer, "ask", "005930", Some("ask:005930"), &payload)
+            .unwrap();
+
+        let line = String::from_utf8(writer).unwrap();
+        let value: serde_json::Value = serde_json::from_str(line.trim_end()).unwrap();
+        assert_eq!(value["request"], "ask:005930");
+        assert_eq!(value["kind"], "ask");
+        assert_eq!(value["stock"], "005930");
+        assert_eq!(value["tr_id"], "H0STASP0");
     }
 }

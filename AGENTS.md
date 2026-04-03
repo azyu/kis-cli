@@ -111,6 +111,7 @@ kis-cli/
 │   ├── TASKS.md           # 작업 목록과 상태
 │   └── STEERING.md        # 방향/우선순위/결정 로그
 ├── docs/
+│   ├── development-checks.md # 표준 개발 체크와 Copy Checklist
 │   ├── SPEC.md            # Rust 2-crate 기술 명세
 │   └── reference.md       # KIS API 레퍼런스 (엔드포인트, TR ID, 거래소 코드 등)
 └── rust/                  # Rust workspace
@@ -121,12 +122,22 @@ kis-cli/
 - Final local test install path: `~/.local/bin/kis`
 - Release build artifact source: `rust/target/release/kis`
 
+## Local Dev Checks
+
+- 표준 개발 체크 진입점은 루트 `Makefile` (`make fmt`, `make fmt-check`, `make lint`, `make test`)이다
+- repo hooks는 `.githooks/`에 커밋하고 `make hooks-install`으로 활성화한다
+- 로컬 개발 워크플로우는 POSIX shell + `make` 기준이며, Windows에서는 Git Bash/WSL 사용을 전제로 한다
+
 ## Key References
 
 - `docs/SPEC.md` - 현재 Rust 2-crate 아키텍처 명세.
   - `kis-core` / `kis-cli` 책임 분리
   - 공개 모듈 경로와 의존 방향
   - 새 기능 추가 시 배치 기준
+- `docs/development-checks.md` - 표준 개발 체크와 다른 저장소로 옮길 때의 Copy Checklist.
+  - `Makefile` 표준 진입점
+  - `.githooks/` 설치 절차
+  - CI 동기화 규칙
 - `docs/reference.md` - API 레퍼런스 문서. 작업 전 반드시 참조할 것.
   - 섹션 1-3: 도메인, 인증 흐름, 공통 헤더/응답 구조
   - 섹션 4: 카테고리별 엔드포인트 (국내주식 156, 해외주식 50, 채권 18, 선물옵션 78, ETF/ETN 6, ELW 24)

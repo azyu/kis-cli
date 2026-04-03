@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -137,13 +138,13 @@ pub struct QuoteArgs {
 #[derive(Debug, Subcommand)]
 pub enum QuoteCommand {
     #[command(about = "호가 조회 (매수/매도 호가잔량)")]
-    Ask(SymbolArgs),
+    Ask(ExchangeSymbolArgs),
     #[command(about = "시간외 현재가 조회")]
     OvertimePrice(SymbolArgs),
     #[command(about = "시간외 호가 조회")]
     OvertimeAsk(SymbolArgs),
     #[command(about = "체결 조회 (최근 거래 내역)")]
-    Ccnl(SymbolArgs),
+    Ccnl(ExchangeSymbolArgs),
     #[command(about = "투자자별 매매동향")]
     Investor(SymbolArgs),
     #[command(about = "회원사별 매매동향")]
@@ -173,6 +174,13 @@ pub struct ChartDailyArgs {
     #[arg(help = "종목코드")]
     pub stock: String,
 
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+
     #[arg(long, help = "시작일 (YYYYMMDD)")]
     pub start: Option<String>,
 
@@ -187,6 +195,13 @@ pub struct ChartDailyArgs {
 pub struct ChartTimeArgs {
     #[arg(help = "종목코드")]
     pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
 
     #[arg(long, default_value = "1", help = "분봉 단위 (1, 5, 10, 15, 30, 60)")]
     pub unit: String,
@@ -347,10 +362,18 @@ pub struct ReserveCancelOrderArgs {
     )]
     pub region: ReservationCancelRegion,
 
-    #[arg(long = "receipt-date", required = true, help = "예약주문 접수일자 (YYYYMMDD)")]
+    #[arg(
+        long = "receipt-date",
+        required = true,
+        help = "예약주문 접수일자 (YYYYMMDD)"
+    )]
     pub receipt_date: String,
 
-    #[arg(long = "reservation-order-no", required = true, help = "해외 예약주문번호")]
+    #[arg(
+        long = "reservation-order-no",
+        required = true,
+        help = "해외 예약주문번호"
+    )]
     pub reservation_order_no: String,
 }
 
@@ -464,7 +487,11 @@ pub struct OverseasPeriodProfitArgs {
     #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
     pub end: String,
 
-    #[arg(long = "currency-type", default_value = "01", help = "원화외화구분코드")]
+    #[arg(
+        long = "currency-type",
+        default_value = "01",
+        help = "원화외화구분코드"
+    )]
     pub currency_type: String,
 }
 
@@ -487,7 +514,11 @@ pub struct OverseasPeriodTransArgs {
     #[arg(long, default_value = "", help = "종목코드 (기본: 전체)")]
     pub stock: String,
 
-    #[arg(long = "side", default_value = "00", help = "매도매수구분 (00:전체, 01:매도, 02:매수)")]
+    #[arg(
+        long = "side",
+        default_value = "00",
+        help = "매도매수구분 (00:전체, 01:매도, 02:매수)"
+    )]
     pub side: String,
 
     #[arg(long = "loan-type", default_value = "", help = "대출구분코드")]
@@ -651,9 +682,42 @@ pub struct MarketArgs {
 #[derive(Debug, Subcommand)]
 pub enum MarketCommand {
     #[command(about = "거래량 순위 조회")]
-    Volume,
+    Volume(MarketVolumeArgs),
+    #[command(about = "해외 시가총액 순위 조회")]
+    Cap(OverseasMarketArgs),
+    #[command(about = "해외 급등락 순위 조회")]
+    PriceFluct(OverseasMarketArgs),
+    #[command(about = "해외 신고가/신저가 순위 조회")]
+    NewHighlow(OverseasMarketArgs),
+    #[command(about = "해외 거래량 급증 순위 조회")]
+    VolumeSurge(OverseasMarketArgs),
+    #[command(about = "국내 시간외 등락율 순위 조회")]
+    OvertimeFluctuation,
+    #[command(about = "국내 시간외 거래량 순위 조회")]
+    OvertimeVolume,
     #[command(about = "휴장일 조회")]
     Holiday(HolidayArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct MarketVolumeArgs {
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasMarketArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
 }
 
 #[derive(Debug, Args)]
@@ -703,6 +767,10 @@ pub enum InfoCommand {
     Opinion(SymbolArgs),
     #[command(about = "종목검색")]
     Search(SearchArgs),
+    #[command(about = "해외주식 상품기본정보 조회")]
+    Detail(OverseasInfoDetailArgs),
+    #[command(about = "해외주식 조건검색")]
+    Screener(Box<OverseasScreenerArgs>),
 }
 
 #[derive(Debug, Args)]
@@ -712,9 +780,95 @@ pub struct SymbolArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ExchangeSymbolArgs {
+    #[arg(help = "종목코드 또는 티커")]
+    pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: Option<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct SearchArgs {
     #[arg(help = "키워드")]
     pub keyword: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasInfoDetailArgs {
+    #[arg(help = "종목코드 또는 티커")]
+    pub stock: String,
+
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
+}
+
+#[derive(Debug, Args)]
+pub struct OverseasScreenerArgs {
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "해외 거래소 코드 (NAS, NYS, AMS, TSE, HKS, SHS, SZS, HSX, HNX)"
+    )]
+    pub exchange: String,
+
+    #[arg(long, help = "현재가 시작 범위")]
+    pub price_start: Option<String>,
+
+    #[arg(long, help = "현재가 끝 범위")]
+    pub price_end: Option<String>,
+
+    #[arg(long, help = "등락율 시작 범위")]
+    pub rate_start: Option<String>,
+
+    #[arg(long, help = "등락율 끝 범위")]
+    pub rate_end: Option<String>,
+
+    #[arg(long = "market-cap-start", help = "시가총액 시작 범위")]
+    pub market_cap_start: Option<String>,
+
+    #[arg(long = "market-cap-end", help = "시가총액 끝 범위")]
+    pub market_cap_end: Option<String>,
+
+    #[arg(long, help = "발행주식수 시작 범위")]
+    pub shares_start: Option<String>,
+
+    #[arg(long, help = "발행주식수 끝 범위")]
+    pub shares_end: Option<String>,
+
+    #[arg(long, help = "거래량 시작 범위")]
+    pub volume_start: Option<String>,
+
+    #[arg(long, help = "거래량 끝 범위")]
+    pub volume_end: Option<String>,
+
+    #[arg(long, help = "거래대금 시작 범위")]
+    pub amount_start: Option<String>,
+
+    #[arg(long, help = "거래대금 끝 범위")]
+    pub amount_end: Option<String>,
+
+    #[arg(long, help = "EPS 시작 범위")]
+    pub eps_start: Option<String>,
+
+    #[arg(long, help = "EPS 끝 범위")]
+    pub eps_end: Option<String>,
+
+    #[arg(long, help = "PER 시작 범위")]
+    pub per_start: Option<String>,
+
+    #[arg(long, help = "PER 끝 범위")]
+    pub per_end: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -723,10 +877,77 @@ pub struct WsArgs {
     pub command: WsCommand,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WsCollectKind {
+    Ask,
+    Ccnl,
+    OvertimeAsk,
+    OvertimeCcnl,
+}
+
+impl WsCollectKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::Ccnl => "ccnl",
+            Self::OvertimeAsk => "overtime-ask",
+            Self::OvertimeCcnl => "overtime-ccnl",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WsCollectRequest {
+    pub kind: WsCollectKind,
+    pub stock: String,
+}
+
+impl WsCollectRequest {
+    pub fn label(&self) -> String {
+        format!("{}:{}", self.kind.as_str(), self.stock)
+    }
+}
+
+impl FromStr for WsCollectRequest {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let (kind, stock) = value
+            .split_once(':')
+            .ok_or_else(|| "request must be in KIND:SYMBOL format".to_string())?;
+        if stock.is_empty() {
+            return Err("symbol is required after ':'".to_string());
+        }
+
+        let kind = match kind {
+            "ask" => WsCollectKind::Ask,
+            "ccnl" => WsCollectKind::Ccnl,
+            "overtime-ask" => WsCollectKind::OvertimeAsk,
+            "overtime-ccnl" => WsCollectKind::OvertimeCcnl,
+            _ => {
+                return Err(format!(
+                    "unsupported stream kind '{kind}' (use ask, ccnl, overtime-ask, overtime-ccnl)"
+                ));
+            }
+        };
+
+        Ok(Self {
+            kind,
+            stock: stock.to_string(),
+        })
+    }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum WsCommand {
     #[command(about = "WebSocket approval key 발급")]
     Approval,
+    #[command(about = "여러 실시간 stream 요청 수집")]
+    Collect(WsCollectArgs),
+    #[command(about = "국내 정규장 실시간호가 구독")]
+    Ask(WsStreamArgs),
+    #[command(about = "국내 정규장 실시간체결가 구독")]
+    Ccnl(WsStreamArgs),
     #[command(about = "국내 시간외 실시간호가 구독")]
     OvertimeAsk(WsStreamArgs),
     #[command(about = "국내 시간외 실시간체결가 구독")]
@@ -735,13 +956,46 @@ pub enum WsCommand {
 
 #[derive(Debug, Args)]
 pub struct WsStreamArgs {
-    #[arg(help = "종목코드")]
-    pub stock: String,
+    #[arg(num_args = 1.., help = "종목코드 (여러 개 가능)")]
+    pub stocks: Vec<String>,
 
-    #[arg(long, default_value_t = 1, help = "수집할 메시지 개수")]
+    #[arg(long, help = "text/json batch 대신 NDJSON row stream 출력")]
+    pub stream: bool,
+
+    #[arg(long, default_value_t = 1, help = "종목별 수집할 메시지 개수")]
     pub count: usize,
 
-    #[arg(long = "timeout-secs", default_value_t = 30, help = "연결/수신 타임아웃(초)")]
+    #[arg(
+        long = "timeout-secs",
+        default_value_t = 30,
+        help = "연결/수신 타임아웃(초)"
+    )]
+    pub timeout_secs: u64,
+
+    #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]
+    pub reconnects: usize,
+}
+
+#[derive(Debug, Args)]
+pub struct WsCollectArgs {
+    #[arg(
+        value_name = "KIND:SYMBOL",
+        num_args = 1..,
+        help = "실시간 요청 (ask:005930, ccnl:005930, overtime-ask:005930, overtime-ccnl:005930)"
+    )]
+    pub requests: Vec<WsCollectRequest>,
+
+    #[arg(long, help = "text/json batch 대신 NDJSON row stream 출력")]
+    pub stream: bool,
+
+    #[arg(long, default_value_t = 1, help = "요청별 수집할 메시지 개수")]
+    pub count: usize,
+
+    #[arg(
+        long = "timeout-secs",
+        default_value_t = 30,
+        help = "연결/수신 타임아웃(초)"
+    )]
     pub timeout_secs: u64,
 
     #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]
@@ -755,7 +1009,7 @@ mod tests {
     use super::{
         BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand, InfoCommand,
         MarketCommand, OrderCommand, OutputFormat, QuoteCommand, ReservationCancelRegion,
-        ReservationRegion, WsCommand,
+        ReservationRegion, WsCollectKind, WsCommand,
     };
 
     #[test]
@@ -768,6 +1022,29 @@ mod tests {
         assert_eq!(args.exchange.as_deref(), Some("NAS"));
         assert_eq!(args.symbol, "AAPL");
         assert!(!args.daily);
+    }
+
+    #[test]
+    fn parses_overseas_daily_price_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "price",
+            "--exchange",
+            "NAS",
+            "AAPL",
+            "--daily",
+            "--period",
+            "W",
+        ])
+        .unwrap();
+        let Command::Price(args) = cli.command else {
+            panic!("expected price command");
+        };
+
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+        assert_eq!(args.symbol, "AAPL");
+        assert!(args.daily);
+        assert_eq!(args.period, "W");
     }
 
     #[test]
@@ -1096,6 +1373,21 @@ mod tests {
     }
 
     #[test]
+    fn parses_overseas_quote_ask_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "quote", "ask", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::Ask(args) = args.command else {
+            panic!("expected quote ask command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
     fn parses_quote_overtime_price_command() {
         let cli = Cli::try_parse_from(["kis", "quote", "overtime-price", "005930"]).unwrap();
         let Command::Quote(args) = cli.command else {
@@ -1106,6 +1398,21 @@ mod tests {
         };
 
         assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_overseas_quote_ccnl_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "quote", "ccnl", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::Ccnl(args) = args.command else {
+            panic!("expected quote ccnl command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
     }
 
     #[test]
@@ -1226,9 +1533,172 @@ mod tests {
             panic!("expected ws overtime-ask command");
         };
 
-        assert_eq!(args.stock, "005930");
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
         assert_eq!(args.count, 2);
         assert_eq!(args.timeout_secs, 10);
+    }
+
+    #[test]
+    fn parses_ws_ask_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "ask",
+            "005930",
+            "--count",
+            "2",
+            "--timeout-secs",
+            "10",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
+        assert_eq!(args.count, 2);
+        assert_eq!(args.timeout_secs, 10);
+        assert!(!args.stream);
+    }
+
+    #[test]
+    fn parses_ws_ccnl_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "ccnl",
+            "005930",
+            "--count",
+            "3",
+            "--reconnects",
+            "1",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ccnl(args) = args.command else {
+            panic!("expected ws ccnl command");
+        };
+
+        assert_eq!(args.stocks, vec!["005930".to_string()]);
+        assert_eq!(args.count, 3);
+        assert_eq!(args.reconnects, 1);
+    }
+
+    #[test]
+    fn parses_ws_multi_ask_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "ws", "ask", "005930", "000660", "--count", "2"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert_eq!(
+            args.stocks,
+            vec!["005930".to_string(), "000660".to_string()]
+        );
+        assert_eq!(args.count, 2);
+        assert!(!args.stream);
+    }
+
+    #[test]
+    fn parses_ws_stream_flag() {
+        let cli = Cli::try_parse_from(["kis", "ws", "ask", "005930", "--stream"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Ask(args) = args.command else {
+            panic!("expected ws ask command");
+        };
+
+        assert!(args.stream);
+    }
+
+    #[test]
+    fn parses_ws_collect_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "collect",
+            "ask:005930",
+            "ccnl:000660",
+            "--count",
+            "2",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Collect(args) = args.command else {
+            panic!("expected ws collect command");
+        };
+
+        assert_eq!(args.requests.len(), 2);
+        assert_eq!(args.requests[0].kind, WsCollectKind::Ask);
+        assert_eq!(args.requests[0].stock, "005930");
+        assert_eq!(args.requests[1].kind, WsCollectKind::Ccnl);
+        assert_eq!(args.requests[1].stock, "000660");
+        assert_eq!(args.count, 2);
+        assert!(!args.stream);
+    }
+
+    #[test]
+    fn parses_ws_collect_stream_flag() {
+        let cli = Cli::try_parse_from(["kis", "ws", "collect", "ask:005930", "--stream"]).unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::Collect(args) = args.command else {
+            panic!("expected ws collect command");
+        };
+
+        assert!(args.stream);
+    }
+
+    #[test]
+    fn rejects_ws_collect_request_without_separator() {
+        let cli = Cli::try_parse_from(["kis", "ws", "collect", "ask005930"]);
+        assert!(cli.is_err());
+    }
+
+    #[test]
+    fn parses_ws_multi_overtime_ccnl_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "ws",
+            "overtime-ccnl",
+            "005930",
+            "000660",
+            "--reconnects",
+            "1",
+        ])
+        .unwrap();
+
+        let Command::Ws(args) = cli.command else {
+            panic!("expected ws command");
+        };
+        let WsCommand::OvertimeCcnl(args) = args.command else {
+            panic!("expected ws overtime-ccnl command");
+        };
+
+        assert_eq!(
+            args.stocks,
+            vec!["005930".to_string(), "000660".to_string()]
+        );
+        assert_eq!(args.reconnects, 1);
     }
 
     #[test]
@@ -1249,6 +1719,57 @@ mod tests {
         assert_eq!(args.start.as_deref(), Some("20260101"));
         assert_eq!(args.end.as_deref(), Some("20260306"));
         assert_eq!(args.period, "W");
+    }
+
+    #[test]
+    fn parses_overseas_chart_daily_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "chart",
+            "daily",
+            "AAPL",
+            "--exchange",
+            "NAS",
+            "--start",
+            "20260301",
+            "--end",
+            "20260306",
+        ])
+        .unwrap();
+        let Command::Chart(args) = cli.command else {
+            panic!("expected chart command");
+        };
+        let ChartCommand::Daily(args) = args.command else {
+            panic!("expected chart daily command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
+    fn parses_overseas_chart_time_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "chart",
+            "time",
+            "AAPL",
+            "--exchange",
+            "NAS",
+            "--unit",
+            "5",
+        ])
+        .unwrap();
+        let Command::Chart(args) = cli.command else {
+            panic!("expected chart command");
+        };
+        let ChartCommand::Time(args) = args.command else {
+            panic!("expected chart time command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+        assert_eq!(args.unit, "5");
     }
 
     #[test]
@@ -1278,6 +1799,109 @@ mod tests {
     }
 
     #[test]
+    fn parses_domestic_market_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "volume"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Volume(args) = args.command else {
+            panic!("expected market volume command");
+        };
+
+        assert_eq!(args.exchange, None);
+    }
+
+    #[test]
+    fn parses_overseas_market_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "volume", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Volume(args) = args.command else {
+            panic!("expected market volume command");
+        };
+
+        assert_eq!(args.exchange.as_deref(), Some("NAS"));
+    }
+
+    #[test]
+    fn parses_overseas_market_cap_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "cap", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::Cap(args) = args.command else {
+            panic!("expected market cap command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_price_fluct_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "price-fluct", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::PriceFluct(args) = args.command else {
+            panic!("expected market price-fluct command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_new_highlow_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "new-highlow", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::NewHighlow(args) = args.command else {
+            panic!("expected market new-highlow command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_market_volume_surge_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "market", "volume-surge", "--exchange", "NAS"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::VolumeSurge(args) = args.command else {
+            panic!("expected market volume-surge command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_market_overtime_fluctuation_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "overtime-fluctuation"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::OvertimeFluctuation = args.command else {
+            panic!("expected market overtime-fluctuation command");
+        };
+    }
+
+    #[test]
+    fn parses_market_overtime_volume_command() {
+        let cli = Cli::try_parse_from(["kis", "market", "overtime-volume"]).unwrap();
+        let Command::Market(args) = cli.command else {
+            panic!("expected market command");
+        };
+        let MarketCommand::OvertimeVolume = args.command else {
+            panic!("expected market overtime-volume command");
+        };
+    }
+
+    #[test]
     fn parses_finance_ratio_command() {
         let cli = Cli::try_parse_from(["kis", "finance", "ratio", "005930", "--div", "1"]).unwrap();
         let Command::Finance(args) = cli.command else {
@@ -1302,5 +1926,52 @@ mod tests {
         };
 
         assert_eq!(args.keyword, "삼성");
+    }
+
+    #[test]
+    fn parses_overseas_info_detail_command() {
+        let cli =
+            Cli::try_parse_from(["kis", "info", "detail", "AAPL", "--exchange", "NAS"]).unwrap();
+        let Command::Info(args) = cli.command else {
+            panic!("expected info command");
+        };
+        let InfoCommand::Detail(args) = args.command else {
+            panic!("expected info detail command");
+        };
+
+        assert_eq!(args.stock, "AAPL");
+        assert_eq!(args.exchange, "NAS");
+    }
+
+    #[test]
+    fn parses_overseas_info_screener_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "info",
+            "screener",
+            "--exchange",
+            "NAS",
+            "--price-start",
+            "160",
+            "--price-end",
+            "170",
+            "--per-start",
+            "10",
+            "--per-end",
+            "20",
+        ])
+        .unwrap();
+        let Command::Info(args) = cli.command else {
+            panic!("expected info command");
+        };
+        let InfoCommand::Screener(args) = args.command else {
+            panic!("expected info screener command");
+        };
+
+        assert_eq!(args.exchange, "NAS");
+        assert_eq!(args.price_start.as_deref(), Some("160"));
+        assert_eq!(args.price_end.as_deref(), Some("170"));
+        assert_eq!(args.per_start.as_deref(), Some("10"));
+        assert_eq!(args.per_end.as_deref(), Some("20"));
     }
 }

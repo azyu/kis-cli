@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result, bail};
 use crate::client::JsonResponse;
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -489,11 +489,7 @@ pub struct AlgoExecutionItem {
     pub ft_ord_unpr3: String,
     #[serde(rename = "ORD_TMD", alias = "ord_tmd", default)]
     pub ord_tmd: String,
-    #[serde(
-        rename = "SPLT_BUY_ATTR_NAME",
-        alias = "splt_buy_attr_name",
-        default
-    )]
+    #[serde(rename = "SPLT_BUY_ATTR_NAME", alias = "splt_buy_attr_name", default)]
     pub splt_buy_attr_name: String,
     #[serde(rename = "TR_CRCY", alias = "tr_crcy", default)]
     pub tr_crcy: String,
@@ -583,11 +579,7 @@ pub struct ReservationCancelRequest {
 pub struct ReservationCancelResponse {
     #[serde(rename = "ODNO", alias = "odno", default)]
     pub odno: String,
-    #[serde(
-        rename = "RSVN_ORD_RCIT_DT",
-        alias = "rsvn_ord_rcit_dt",
-        default
-    )]
+    #[serde(rename = "RSVN_ORD_RCIT_DT", alias = "rsvn_ord_rcit_dt", default)]
     pub rsvn_ord_rcit_dt: String,
     #[serde(rename = "OVRS_RSVN_ODNO", alias = "ovrs_rsvn_odno", default)]
     pub ovrs_rsvn_odno: String,
@@ -730,6 +722,7 @@ where
     Ok(BalanceResult { items, summary })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn inquire_present_balance<C>(
     client: &C,
     cano: &str,
@@ -756,6 +749,7 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_present_balance<C>(
     client: &C,
     account_no: &str,
@@ -924,6 +918,7 @@ where
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn inquire_ccnl<C>(
     client: &C,
     cano: &str,
@@ -956,6 +951,7 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_executions<C>(
     client: &C,
     account_no: &str,
@@ -1161,6 +1157,7 @@ where
     parse_output(response, "possible buy amount")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn inquire_period_profit<C>(
     client: &C,
     cano: &str,
@@ -1191,6 +1188,7 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_period_profit<C>(
     client: &C,
     account_no: &str,
@@ -1258,6 +1256,7 @@ where
     Ok(PeriodProfitResult { items, summary })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn inquire_period_trans<C>(
     client: &C,
     cano: &str,
@@ -1286,6 +1285,7 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_period_transactions<C>(
     client: &C,
     account_no: &str,
@@ -1436,6 +1436,7 @@ where
     Ok(AlgoExecutionResult { items, summary })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn order_resv_list<C>(
     client: &C,
     nat_dv: &str,
@@ -1464,6 +1465,7 @@ where
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_reservation_orders<C>(
     client: &C,
     market: &str,
@@ -1615,9 +1617,9 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
+    use crate::client::JsonResponse;
     use anyhow::Result;
     use async_trait::async_trait;
-    use crate::client::JsonResponse;
     use serde_json::json;
 
     use super::*;
@@ -2144,10 +2146,9 @@ mod tests {
             call: call.clone(),
         };
 
-        let result =
-            inquire_psamount(&client, "12345678", "01", "NASD", "123.45", "AAPL", true)
-                .await
-                .unwrap();
+        let result = inquire_psamount(&client, "12345678", "01", "NASD", "123.45", "AAPL", true)
+            .await
+            .unwrap();
 
         assert_eq!(result.tr_crcy_cd, "USD");
         assert_eq!(result.ord_psbl_qty, "7");
@@ -2206,16 +2207,7 @@ mod tests {
         };
 
         let result = inquire_period_profit(
-            &client,
-            "12345678",
-            "01",
-            "NASD",
-            "",
-            "USD",
-            "",
-            "20240601",
-            "20240630",
-            "01",
+            &client, "12345678", "01", "NASD", "", "USD", "", "20240601", "20240630", "01",
         )
         .await
         .unwrap();
@@ -2279,15 +2271,7 @@ mod tests {
         };
 
         let result = inquire_period_trans(
-            &client,
-            "12345678",
-            "01",
-            "20240601",
-            "20240630",
-            "NASD",
-            "",
-            "00",
-            "",
+            &client, "12345678", "01", "20240601", "20240630", "NASD", "", "00", "",
         )
         .await
         .unwrap();
@@ -2350,8 +2334,9 @@ mod tests {
             calls: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let result =
-            inquire_algo_ccnl(&client, "12345678", "01", "", "", "", "").await.unwrap();
+        let result = inquire_algo_ccnl(&client, "12345678", "01", "", "", "", "")
+            .await
+            .unwrap();
 
         assert_eq!(result.items.len(), 2);
         assert_eq!(result.items[0].odno, "5001");
@@ -2404,15 +2389,7 @@ mod tests {
         };
 
         let result = order_resv_list(
-            &client,
-            "asia",
-            "12345678",
-            "01",
-            "20250101",
-            "20250131",
-            "00",
-            "TKSE",
-            "",
+            &client, "asia", "12345678", "01", "20250101", "20250131", "00", "TKSE", "",
         )
         .await
         .unwrap();
