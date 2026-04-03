@@ -6,8 +6,24 @@
 
 ### Homebrew
 
+처음 설치할 때는 tap을 추가한 뒤 `kis`를 설치하면 됩니다.
+
+```bash
+brew tap azyu/tap
+brew install kis
+```
+
+이미 tap을 쓰고 있다면 아래 한 줄로도 설치할 수 있습니다.
+
 ```bash
 brew install azyu/tap/kis
+```
+
+업데이트는 다음처럼 진행합니다.
+
+```bash
+brew update
+brew upgrade kis
 ```
 
 태그 릴리즈가 발행되면 Homebrew tap formula도 함께 갱신됩니다.
