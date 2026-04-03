@@ -50,6 +50,9 @@ cargo run --manifest-path rust/Cargo.toml -p kis-cli --bin kis -- config
 
 [한국투자증권 API 포털](https://apiportal.koreainvestment.com)에서 앱키와 시크릿키를 발급받습니다.
 
+- 공식 오류 코드는 [KIS Developers 오류코드 페이지](https://apiportal.koreainvestment.com/faq-error-code)에서 확인할 수 있습니다.
+- 공식 샘플/레퍼런스 저장소는 [koreainvestment/open-trading-api](https://github.com/koreainvestment/open-trading-api)입니다.
+
 ### 2. 설정 파일 작성
 
 ```bash
