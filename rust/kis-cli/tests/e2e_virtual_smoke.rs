@@ -90,6 +90,16 @@ fn assert_error_command(value: &Value, command: &str) {
     );
 }
 
+fn assert_error_message_contains(value: &Value, needle: &str) {
+    let message = value["error"]["message"]
+        .as_str()
+        .expect("error message should be a string");
+    assert!(
+        message.contains(needle),
+        "expected error message to contain {needle:?}, got: {message}"
+    );
+}
+
 #[test]
 #[ignore = "opt-in virtual smoke; set KIS_E2E_VIRTUAL=1 and KIS_E2E_VIRTUAL_CONFIG"]
 fn runs_virtual_config_command() {
@@ -153,6 +163,7 @@ fn virtual_known_blockers_surface_structured_errors() {
 
     let quote = ctx.run_json_failure(&["quote", "ask", &ctx.stock]);
     assert_error_command(&quote, "quote");
+    assert_error_message_contains(&quote, "inquire-asking-price");
 
     let holiday = ctx.run_json_failure(&["market", "holiday", "20260324"]);
     assert_error_command(&holiday, "market");
@@ -161,4 +172,16 @@ fn virtual_known_blockers_surface_structured_errors() {
     let search = ctx.run_json_failure(&["info", "search", "삼성전자"]);
     assert_error_command(&search, "info");
     assert_eq!(search["error"]["code"], "EGW2004", "response: {search}");
+
+    let news = ctx.run_json_failure(&["info", "news", &ctx.stock]);
+    assert_error_command(&news, "info");
+    assert_error_message_contains(&news, "OPSQ0002");
+
+    let opinion = ctx.run_json_failure(&["info", "opinion", &ctx.stock]);
+    assert_error_command(&opinion, "info");
+    assert_error_message_contains(&opinion, "OPSQ0002");
+
+    let detail = ctx.run_json_failure(&["info", "detail", "AAPL", "--exchange", "NAS"]);
+    assert_error_command(&detail, "info");
+    assert_error_message_contains(&detail, "search-info");
 }

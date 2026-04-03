@@ -43,8 +43,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 ## Blockers
 
 - 모의투자 `inquire-psbl-sell` 호출은 2026-03-06 실측 기준 `OPSQ0002` (`없는 서비스 코드 입니다`)를 반환한다. 구현은 KIS 오류를 그대로 surface 하며, 모의투자 지원 여부는 후속 확인이 필요하다.
-- 모의투자 도메인에서 일부 국내 읽기 API는 실측 기준 지원되지 않는다. `quote ask`는 `404 Not Found`, `market holiday`/`info search`는 `EGW2004` (`모의투자 TR 이 아닙니다.`)를 반환했다.
-- 모의투자 `info news` 실패 보고는 2026-03-24 현재 실측 에러 payload가 확보되지 않았다. live evidence 없이 endpoint/TR ID를 바꾸지 않고, opt-in smoke 정규 범위에도 넣지 않는다.
+- 모의투자 도메인에서 일부 읽기 API는 실측 기준 지원되지 않는다. 국내 `quote ask`는 `404 Not Found`, `market holiday`/`info search`는 `EGW2004` (`모의투자 TR 이 아닙니다.`), `info news`/`info opinion`은 `OPSQ0002` (`없는 서비스 코드 입니다`)를 반환했다.
+- 모의투자 해외 시세/정보도 일부 읽기 API가 막힌다. `info detail --exchange NAS`는 실측 기준 `/uapi/overseas-price/v1/quotations/search-info` 호출 실패를 반환했다. live evidence 없이 endpoint/TR ID를 바꾸지 않고 blocker로 유지한다.
 - 해외 주문/잔고 계열은 Rust 구현 기준으로도 payload shape와 모의투자 지원 여부를 단계별로 검증해야 한다.
 - 미국 주간주문/정정취소는 공식 예제 기준 실전 TR ID만 확인된다. 모의투자 TR ID는 추정하지 말고 명시적으로 거절한다.
 - `overtime_ccnl_krx`는 open-trading-api 예제 기준 WebSocket 실시간 체결(TR `H0STOUP0`)만 확인된다. REST 마일스톤에 섞지 않는다.
@@ -69,7 +69,8 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: WebSocket 파이프/LLM 전달용 출력은 기존 batch 계약과 분리한다. `ws` 전용 `--stream`은 성공 출력만 NDJSON으로 즉시 flush하고, 기존 batch `text/json` 계약은 유지한다. `--stream`과 전역 JSON 모드는 섞지 않는다.
 - 2026-03-24: WebSocket NDJSON 스트리밍 출력 1차를 완료했다. `kis ws ask|ccnl|overtime-ask|overtime-ccnl|collect --stream`이 row 단위 NDJSON을 stdout으로 출력하고 각 라인마다 flush한다. `--stream`은 `--json`/`--output json`과 함께 쓰지 못하며, 기존 batch text/json 출력 계약은 유지한다.
 - 2026-03-24: 국내 `chart daily`는 `output` 단일 payload와 `output1`/`output2` payload를 모두 수용한다. `output1` summary는 무시하고 `output2` rows만 파싱한다.
-- 2026-03-24: opt-in virtual smoke 범위를 `config`, `price`, `price --daily`, `chart daily` 성공 경로와 `quote ask`/`market holiday`/`info search` 구조화 실패 경로까지 확장했다. `info news`는 실측 evidence 확보 전까지 조사 대상으로만 유지한다.
+- 2026-03-24: opt-in virtual smoke 범위를 `config`, `price`, `price --daily`, `chart daily` 성공 경로와 `quote ask`/`market holiday`/`info search` 구조화 실패 경로까지 확장했다.
+- 2026-04-03: virtual live smoke에서 `info news`/`info opinion`의 `OPSQ0002`, `info detail --exchange NAS`의 해외 `search-info` 호출 실패를 재현했다. 이들 명령은 fallback 없이 KIS 응답/실패를 그대로 surface하고 opt-in blocker smoke에 포함한다.
 - 2026-03-08: WebSocket 표면 확대 1차를 완료했다. `kis ws ask <symbol>`와 `kis ws ccnl <symbol>`를 추가하고, 기존 `kis ws overtime-ask|overtime-ccnl`의 approval-key + count-limited collect + 기본 재연결 모델을 그대로 재사용한다. 다중 구독 UX는 이번 단계에 넣지 않는다.
 - 2026-03-08: WebSocket 다중 구독 UX 1차를 완료했다. `kis ws ask|ccnl|overtime-ask|overtime-ccnl <symbol>...`가 같은 spec 안에서 여러 종목을 순차 수집할 수 있고, approval key는 한 번만 발급해 종목별 수집에 재사용한다. `--count`는 종목별 메시지 개수로 해석한다.
 - 2026-03-08: WebSocket 다중 구독 UX 2차를 완료했다. 전용 `kis ws collect KIND:SYMBOL...` surface로 `ask|ccnl|overtime-ask|overtime-ccnl`를 섞어 요청할 수 있고, 수집은 요청별 순차 처리지만 approval key는 1회만 발급해 재사용한다. `--count`는 요청별 메시지 개수다.

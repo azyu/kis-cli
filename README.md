@@ -250,8 +250,8 @@ make test-e2e-virtual
 - `KIS_E2E_VIRTUAL=1`이 있어야 ignored smoke가 실제 호출을 수행합니다.
 - `KIS_E2E_VIRTUAL_CONFIG`는 모의투자 자격증명이 들어 있는 설정 파일 경로입니다.
 - `KIS_E2E_VIRTUAL_STOCK`은 선택 사항이며 기본값은 `005930`입니다.
-- 1차 harness는 `config`, `price`, `price --daily`만 포함합니다.
-- known virtual blocker인 `quote ask`, `market holiday`, `info search`, `psbl-sell`은 의도적으로 제외했습니다.
+- 현재 harness는 `config`, `price`, `price --daily`, `chart daily` 성공 경로와 일부 known blocker의 구조화 실패 경로를 함께 확인합니다.
+- 실측 기준 known virtual blocker는 `quote ask`(국내 `404 Not Found`), `market holiday`/`info search`(`EGW2004`), `info news`/`info opinion`(`OPSQ0002`), `info detail --exchange NAS`(해외 `search-info` 호출 실패), `psbl-sell`입니다.
 
 ## 지원 표면
 
