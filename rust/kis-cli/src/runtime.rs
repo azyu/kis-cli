@@ -77,6 +77,8 @@ struct ErrorOutput {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,6 +97,7 @@ struct ClassifiedError {
     kind: &'static str,
     message: String,
     code: Option<String>,
+    details: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -3944,6 +3947,7 @@ pub fn write_json_error(writer: &mut dyn Write, command: &str, err: &anyhow::Err
                 kind: classified.kind,
                 message: classified.message,
                 code: classified.code,
+                details: classified.details,
             },
         },
     )
@@ -3956,6 +3960,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                 kind: "validation",
                 message: validation.to_string(),
                 code: None,
+                details: None,
             };
         }
 
@@ -3966,6 +3971,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "api",
                         message: message.clone(),
                         code: Some(code.clone()),
+                        details: None,
                     };
                 }
                 KisError::Config(message) => {
@@ -3973,6 +3979,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: message.clone(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Yaml(error) => {
@@ -3980,6 +3987,7 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: error.to_string(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Io(error) if err.to_string().contains("loading config") => {
@@ -3987,14 +3995,11 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
                         kind: "config",
                         message: error.to_string(),
                         code: None,
+                        details: None,
                     };
                 }
                 KisError::Io(_) | KisError::Http(_) | KisError::Json(_) | KisError::Parse(_) => {
-                    return ClassifiedError {
-                        kind: "runtime",
-                        message: err.to_string(),
-                        code: None,
-                    };
+                    return classify_non_api_error(err, "runtime");
                 }
             }
         }
@@ -4005,10 +4010,99 @@ fn classify_error(err: &anyhow::Error) -> ClassifiedError {
     } else {
         "runtime"
     };
+    classify_non_api_error(err, kind)
+}
+
+fn classify_non_api_error(err: &anyhow::Error, default_kind: &'static str) -> ClassifiedError {
+    let chain = err
+        .chain()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+    let message = chain
+        .last()
+        .map(|message| normalize_runtime_message(message))
+        .unwrap_or_else(|| normalize_runtime_message(&err.to_string()));
+    let details = match chain.len() {
+        0 | 1 => None,
+        _ => Some(chain.join("\ncaused by: ")),
+    };
+
+    if let Some((code, api_message)) = extract_api_code_and_message(&message) {
+        return ClassifiedError {
+            kind: "api",
+            message: api_message,
+            code: Some(code),
+            details,
+        };
+    }
+
+    if let Some((code, api_message)) = extract_api_error_from_http_body(&message) {
+        return ClassifiedError {
+            kind: "api",
+            message: api_message,
+            code: Some(code),
+            details,
+        };
+    }
+
+    let code = extract_http_status_code(&message);
     ClassifiedError {
-        kind,
-        message: err.to_string(),
-        code: None,
+        kind: default_kind,
+        message,
+        code,
+        details,
+    }
+}
+
+fn normalize_runtime_message(message: &str) -> String {
+    message
+        .strip_prefix("parse error: ")
+        .unwrap_or(message)
+        .to_string()
+}
+
+fn extract_api_code_and_message(message: &str) -> Option<(String, String)> {
+    let start = message.find('[')?;
+    let rest = &message[start + 1..];
+    let end_rel = rest.find(']')?;
+    let code = &rest[..end_rel];
+    if code.is_empty()
+        || !code
+            .chars()
+            .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())
+    {
+        return None;
+    }
+    let tail = rest[end_rel + 1..].trim();
+    if tail.is_empty() {
+        return None;
+    }
+    Some((code.to_string(), tail.to_string()))
+}
+
+fn extract_api_error_from_http_body(message: &str) -> Option<(String, String)> {
+    let json_start = message.find('{')?;
+    let json_body = &message[json_start..];
+    let value: Value = serde_json::from_str(json_body).ok()?;
+    let code = value.get("msg_cd")?.as_str()?.to_string();
+    let api_message = value.get("msg1")?.as_str()?.to_string();
+    if code.is_empty() || api_message.is_empty() {
+        return None;
+    }
+    Some((code, api_message))
+}
+
+fn extract_http_status_code(message: &str) -> Option<String> {
+    let needle = "status ";
+    let start = message.find(needle)? + needle.len();
+    let digits = message[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if digits.len() == 3 {
+        Some(format!("HTTP_{digits}"))
+    } else {
+        None
     }
 }
 
@@ -4331,6 +4425,62 @@ mod tests {
         assert_eq!(classified.kind, "validation");
         assert_eq!(classified.message, "--price is required");
         assert_eq!(classified.code, None);
+        assert_eq!(classified.details, None);
+    }
+
+    #[test]
+    fn classifies_wrapped_api_errors_with_code_and_details() {
+        let err = anyhow::anyhow!("news API error: [OPSQ0002] 없는 서비스 코드 입니다")
+            .context("GET /uapi/domestic-stock/v1/quotations/news-title (FHKST01010800)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "api");
+        assert_eq!(classified.code.as_deref(), Some("OPSQ0002"));
+        assert_eq!(classified.message, "없는 서비스 코드 입니다");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("news-title"))
+        );
+    }
+
+    #[test]
+    fn classifies_http_status_runtime_errors_with_status_code_and_details() {
+        let err = anyhow::Error::new(KisError::Parse(
+            "API returned status 404 Not Found:".to_string(),
+        ))
+        .context("GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "runtime");
+        assert_eq!(classified.code.as_deref(), Some("HTTP_404"));
+        assert_eq!(classified.message, "API returned status 404 Not Found:");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("inquire-asking-price"))
+        );
+    }
+
+    #[test]
+    fn classifies_http_json_api_errors_with_code_and_details() {
+        let err = anyhow::Error::new(KisError::Parse(
+            r#"API returned status 500 Internal Server Error: {"rt_cd":"1","msg_cd":"EGW2004","msg1":"모의투자 TR 이 아닙니다."}"#.to_string(),
+        ))
+        .context("GET /uapi/overseas-price/v1/quotations/search-info (CTPF1702R)");
+
+        let classified = classify_error(&err);
+        assert_eq!(classified.kind, "api");
+        assert_eq!(classified.code.as_deref(), Some("EGW2004"));
+        assert_eq!(classified.message, "모의투자 TR 이 아닙니다.");
+        assert!(
+            classified
+                .details
+                .as_deref()
+                .is_some_and(|details| details.contains("search-info"))
+        );
     }
 
     #[test]
@@ -4352,6 +4502,31 @@ mod tests {
                     "kind": "api",
                     "message": "없는 서비스 코드 입니다",
                     "code": "OPSQ0002"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn writes_json_error_with_details_for_wrapped_runtime_errors() {
+        let mut writer = Vec::new();
+        let err = anyhow::Error::new(KisError::Parse(
+            "API returned status 404 Not Found:".to_string(),
+        ))
+        .context("GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)");
+
+        write_json_error(&mut writer, "quote", &err).unwrap();
+
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&writer).unwrap(),
+            json!({
+                "ok": false,
+                "command": "quote",
+                "error": {
+                    "kind": "runtime",
+                    "message": "API returned status 404 Not Found:",
+                    "code": "HTTP_404",
+                    "details": "GET /uapi/domestic-stock/v1/quotations/inquire-asking-price (FHKST01010200)\ncaused by: parse error: API returned status 404 Not Found:"
                 }
             })
         );
