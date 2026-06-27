@@ -157,7 +157,7 @@ impl Default for ForeignInstitutionTotalQuery {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ForeignInstitutionTotalItem {
     #[serde(default)]
     pub hts_kor_isnm: String,
@@ -173,6 +173,14 @@ pub struct ForeignInstitutionTotalItem {
     pub frgn_ntby_tr_pbmn: String,
     #[serde(default)]
     pub orgn_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub etc_orgt_ntby_vol: String,
+    #[serde(default)]
+    pub etc_corp_ntby_vol: String,
+    #[serde(default)]
+    pub etc_orgt_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub etc_corp_ntby_tr_pbmn: String,
     #[serde(default)]
     pub stck_prpr: String,
     #[serde(default)]
@@ -520,6 +528,29 @@ mod tests {
 
         assert_eq!(items[0].hts_kor_isnm, "삼성전자");
         assert_eq!(items[0].mksc_shrn_iscd, "005930");
+    }
+
+    #[test]
+    fn parses_foreign_institution_total_etc_ranking_fields() {
+        let items = parse_foreign_institution_total(json!({
+            "rt_cd": "0",
+            "msg_cd": "MCA00000",
+            "msg1": "정상처리",
+            "Output": [{
+                "hts_kor_isnm": "기타상위",
+                "mksc_shrn_iscd": "000001",
+                "etc_orgt_ntby_vol": "12",
+                "etc_corp_ntby_vol": "34",
+                "etc_orgt_ntby_tr_pbmn": "5600",
+                "etc_corp_ntby_tr_pbmn": "7800"
+            }]
+        }))
+        .unwrap();
+
+        assert_eq!(items[0].etc_orgt_ntby_vol, "12");
+        assert_eq!(items[0].etc_corp_ntby_vol, "34");
+        assert_eq!(items[0].etc_orgt_ntby_tr_pbmn, "5600");
+        assert_eq!(items[0].etc_corp_ntby_tr_pbmn, "7800");
     }
 
     #[tokio::test]
