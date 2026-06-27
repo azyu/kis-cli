@@ -174,10 +174,7 @@ fn resolve_config_path(cli_config: Option<&Path>) -> Result<PathBuf> {
     }
 
     let home = dirs::home_dir().context("determining home directory")?;
-    Ok(PathBuf::from(home)
-        .join(".config")
-        .join("kis")
-        .join("config.yaml"))
+    Ok(home.join(".config").join("kis").join("config.yaml"))
 }
 
 async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Write) -> Result<()> {
@@ -409,6 +406,20 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
                 .map(|item| vec![item.memb_nm, item.seln_vol, item.shnu_vol, item.ntby_qty])
                 .collect::<Vec<_>>();
             let table = render::render_table(&["회원사", "매도수량", "매수수량", "순매수"], &rows);
+            writeln!(writer, "{table}")?;
+        }
+        cli::QuoteCommand::ForeignInstitution(args) => {
+            let investor = args.investor;
+            let items = quote::get_foreign_institution_total(
+                &runtime.client,
+                foreign_institution_query(args),
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &items);
+            }
+
+            let table = foreign_institution_table(investor, items);
             writeln!(writer, "{table}")?;
         }
     }
@@ -2833,6 +2844,105 @@ fn json_string_alias(value: &Value, keys: &[&str]) -> String {
         .to_string()
 }
 
+fn foreign_institution_table(
+    investor: cli::ForeignInstitutionInvestorArg,
+    items: Vec<quote::ForeignInstitutionTotalItem>,
+) -> String {
+    if investor == cli::ForeignInstitutionInvestorArg::Etc {
+        let rows = items
+            .into_iter()
+            .map(|item| {
+                vec![
+                    item.hts_kor_isnm,
+                    item.mksc_shrn_iscd,
+                    item.stck_prpr,
+                    item.ntby_qty,
+                    item.etc_orgt_ntby_vol,
+                    item.etc_corp_ntby_vol,
+                    item.etc_orgt_ntby_tr_pbmn,
+                    item.etc_corp_ntby_tr_pbmn,
+                    item.acml_vol,
+                ]
+            })
+            .collect::<Vec<_>>();
+        return render::render_table(
+            &[
+                "종목명",
+                "코드",
+                "현재가",
+                "순매수",
+                "기타단체순매수",
+                "기타법인순매수",
+                "기타단체대금",
+                "기타법인대금",
+                "거래량",
+            ],
+            &rows,
+        );
+    }
+
+    let rows = items
+        .into_iter()
+        .map(|item| {
+            vec![
+                item.hts_kor_isnm,
+                item.mksc_shrn_iscd,
+                item.stck_prpr,
+                item.ntby_qty,
+                item.frgn_ntby_qty,
+                item.orgn_ntby_qty,
+                item.frgn_ntby_tr_pbmn,
+                item.orgn_ntby_tr_pbmn,
+                item.acml_vol,
+            ]
+        })
+        .collect::<Vec<_>>();
+    render::render_table(
+        &[
+            "종목명",
+            "코드",
+            "현재가",
+            "순매수",
+            "외국인순매수",
+            "기관순매수",
+            "외국인대금",
+            "기관대금",
+            "거래량",
+        ],
+        &rows,
+    )
+}
+
+fn foreign_institution_query(
+    args: cli::ForeignInstitutionArgs,
+) -> quote::ForeignInstitutionTotalQuery {
+    quote::ForeignInstitutionTotalQuery {
+        market: match args.market {
+            cli::ForeignInstitutionMarketArg::All => quote::ForeignInstitutionMarket::All,
+            cli::ForeignInstitutionMarketArg::Kospi => quote::ForeignInstitutionMarket::Kospi,
+            cli::ForeignInstitutionMarketArg::Kosdaq => quote::ForeignInstitutionMarket::Kosdaq,
+        },
+        sort_by: match args.sort_by {
+            cli::ForeignInstitutionSortByArg::Qty => quote::ForeignInstitutionSortBy::Quantity,
+            cli::ForeignInstitutionSortByArg::Amount => quote::ForeignInstitutionSortBy::Amount,
+        },
+        side: match args.side {
+            cli::ForeignInstitutionSideArg::NetBuy => quote::ForeignInstitutionRankSort::NetBuy,
+            cli::ForeignInstitutionSideArg::NetSell => quote::ForeignInstitutionRankSort::NetSell,
+        },
+        investor: match args.investor {
+            cli::ForeignInstitutionInvestorArg::All => quote::ForeignInstitutionInvestor::All,
+            cli::ForeignInstitutionInvestorArg::Foreign => {
+                quote::ForeignInstitutionInvestor::Foreign
+            }
+            cli::ForeignInstitutionInvestorArg::Institution => {
+                quote::ForeignInstitutionInvestor::Institution
+            }
+            cli::ForeignInstitutionInvestorArg::Etc => quote::ForeignInstitutionInvestor::Etc,
+        },
+    }
+}
+
 fn price_sign(code: &str) -> &'static str {
     match code {
         "1" | "2" => "+",
@@ -2861,14 +2971,15 @@ fn yn_to_mark(value: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use kis_cli::cli;
     use kis_core::config::{AppConfig, Environment};
     use serde_json::json;
 
     use super::{
         KisError, OverseasModifyMode, OverseasPlaceMode, classify_error, config_output,
-        display_or_dash, mask_app_key, order_output, overseas_modify_mode, overseas_place_mode,
-        price_sign, reserve_order_output, validation_error, write_command_json, write_json_error,
-        write_json_raw, yn_to_mark,
+        display_or_dash, foreign_institution_table, mask_app_key, order_output,
+        overseas_modify_mode, overseas_place_mode, price_sign, reserve_order_output,
+        validation_error, write_command_json, write_json_error, write_json_raw, yn_to_mark,
     };
 
     #[test]
@@ -2957,6 +3068,30 @@ mod tests {
                 "reservation_order_no": "900000001"
             })
         );
+    }
+
+    #[test]
+    fn renders_etc_foreign_institution_columns_for_etc_rankings() {
+        let table = foreign_institution_table(
+            cli::ForeignInstitutionInvestorArg::Etc,
+            vec![kis_core::domestic::quote::ForeignInstitutionTotalItem {
+                hts_kor_isnm: "기타상위".to_string(),
+                mksc_shrn_iscd: "000001".to_string(),
+                ntby_qty: "46".to_string(),
+                etc_orgt_ntby_vol: "12".to_string(),
+                etc_corp_ntby_vol: "34".to_string(),
+                etc_orgt_ntby_tr_pbmn: "5600".to_string(),
+                etc_corp_ntby_tr_pbmn: "7800".to_string(),
+                ..Default::default()
+            }],
+        );
+
+        assert!(table.contains("기타단체순매수"));
+        assert!(table.contains("기타법인순매수"));
+        assert!(table.contains("기타단체대금"));
+        assert!(table.contains("기타법인대금"));
+        assert!(table.contains("5600"));
+        assert!(table.contains("7800"));
     }
 
     #[test]

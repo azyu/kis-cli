@@ -363,7 +363,7 @@ async fn collect_realtime_messages_once(
 
     let subscribe = build_control_message(approval_key, SUBSCRIBE_TYPE, spec.tr_id, tr_key);
     socket
-        .send(Message::Text(subscribe.to_string().into()))
+        .send(Message::Text(subscribe.to_string()))
         .await
         .map_err(|error| KisError::Parse(format!("websocket subscribe failed: {error}")))?;
 
@@ -391,7 +391,7 @@ async fn collect_realtime_messages_once(
                 ParsedMessage::System => {}
                 ParsedMessage::PingPong => {
                     socket
-                        .send(Message::Pong(Vec::new().into()))
+                        .send(Message::Pong(Vec::new()))
                         .await
                         .map_err(|error| {
                             KisError::Parse(format!("websocket pong failed: {error}"))
@@ -407,7 +407,7 @@ async fn collect_realtime_messages_once(
                     ParsedMessage::System => {}
                     ParsedMessage::PingPong => {
                         socket
-                            .send(Message::Pong(Vec::new().into()))
+                            .send(Message::Pong(Vec::new()))
                             .await
                             .map_err(|error| {
                                 KisError::Parse(format!("websocket pong failed: {error}"))
@@ -428,9 +428,7 @@ async fn collect_realtime_messages_once(
     }
 
     let unsubscribe = build_control_message(approval_key, UNSUBSCRIBE_TYPE, spec.tr_id, tr_key);
-    let _ = socket
-        .send(Message::Text(unsubscribe.to_string().into()))
-        .await;
+    let _ = socket.send(Message::Text(unsubscribe.to_string())).await;
     let _ = socket.close(None).await;
 
     Ok(collected)
@@ -503,17 +501,17 @@ fn parse_system_message(raw: &str) -> Result<ParsedMessage> {
         return Ok(ParsedMessage::PingPong);
     }
 
-    if let Some(body) = envelope.body {
-        if body.rt_cd != "0" {
-            return Err(KisError::Api {
-                code: if body.msg_cd.is_empty() {
-                    "WS".to_string()
-                } else {
-                    body.msg_cd
-                },
-                message: body.msg1,
-            });
-        }
+    if let Some(body) = envelope.body
+        && body.rt_cd != "0"
+    {
+        return Err(KisError::Api {
+            code: if body.msg_cd.is_empty() {
+                "WS".to_string()
+            } else {
+                body.msg_cd
+            },
+            message: body.msg1,
+        });
     }
 
     Ok(ParsedMessage::System)

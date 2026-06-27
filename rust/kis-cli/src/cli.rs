@@ -72,7 +72,7 @@ impl Cli {
 pub enum Command {
     #[command(about = "시세 조회 - 국내/해외 주식 현재가 조회")]
     Price(PriceArgs),
-    #[command(about = "시세 상세 - 호가, 체결, 투자자, 회원사 조회")]
+    #[command(about = "시세 상세 - 호가, 체결, 투자자, 회원사, 외국인/기관 랭킹 조회")]
     Quote(QuoteArgs),
     #[command(about = "차트 데이터 - 일별/분별 차트, 지수 차트")]
     Chart(ChartArgs),
@@ -148,6 +148,73 @@ pub enum QuoteCommand {
     Investor(SymbolArgs),
     #[command(about = "회원사별 매매동향")]
     Member(SymbolArgs),
+    #[command(
+        about = "외국인/기관 순매수·순매도 랭킹",
+        long_about = "국내기관_외국인 매매종목 가집계 랭킹을 조회합니다.\n\n기본값은 전체 시장, 금액 정렬, 순매수 상위, 전체 투자자입니다.\n예: kis --env real --json quote foreign-institution --market all --sort-by amount --side net-buy --investor all"
+    )]
+    ForeignInstitution(ForeignInstitutionArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ForeignInstitutionArgs {
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionMarketArg::All,
+        help = "시장 구분: all=전체, kospi=코스피, kosdaq=코스닥"
+    )]
+    pub market: ForeignInstitutionMarketArg,
+
+    #[arg(
+        long = "sort-by",
+        value_enum,
+        default_value_t = ForeignInstitutionSortByArg::Amount,
+        help = "정렬 기준: qty=수량, amount=금액"
+    )]
+    pub sort_by: ForeignInstitutionSortByArg,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionSideArg::NetBuy,
+        help = "랭킹 방향: net-buy=순매수 상위, net-sell=순매도 상위"
+    )]
+    pub side: ForeignInstitutionSideArg,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionInvestorArg::All,
+        help = "투자자 구분: all=전체, foreign=외국인, institution=기관계, etc=기타"
+    )]
+    pub investor: ForeignInstitutionInvestorArg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionMarketArg {
+    All,
+    Kospi,
+    Kosdaq,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionSortByArg {
+    Qty,
+    Amount,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionSideArg {
+    NetBuy,
+    NetSell,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionInvestorArg {
+    All,
+    Foreign,
+    Institution,
+    Etc,
 }
 
 #[derive(Debug, Args)]
@@ -773,9 +840,10 @@ mod tests {
     use clap::Parser;
 
     use super::{
-        BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand, InfoCommand,
-        MarketCommand, OrderCommand, OutputFormat, QuoteCommand, ReservationCancelRegion,
-        ReservationRegion, WsCommand,
+        BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand,
+        ForeignInstitutionInvestorArg, ForeignInstitutionMarketArg, ForeignInstitutionSideArg,
+        ForeignInstitutionSortByArg, InfoCommand, MarketCommand, OrderCommand, OutputFormat,
+        QuoteCommand, ReservationCancelRegion, ReservationRegion, WsCommand,
     };
 
     #[test]
@@ -1126,6 +1194,35 @@ mod tests {
         };
 
         assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_quote_foreign_institution_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "quote",
+            "foreign-institution",
+            "--market",
+            "kosdaq",
+            "--sort-by",
+            "amount",
+            "--side",
+            "net-sell",
+            "--investor",
+            "institution",
+        ])
+        .unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::ForeignInstitution(args) = args.command else {
+            panic!("expected quote foreign-institution command");
+        };
+
+        assert_eq!(args.market, ForeignInstitutionMarketArg::Kosdaq);
+        assert_eq!(args.sort_by, ForeignInstitutionSortByArg::Amount);
+        assert_eq!(args.side, ForeignInstitutionSideArg::NetSell);
+        assert_eq!(args.investor, ForeignInstitutionInvestorArg::Institution);
     }
 
     #[test]

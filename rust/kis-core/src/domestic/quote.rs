@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::api_client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, ensure_success, parse_output};
 
 const PATH_INQUIRE_ASKING_PRICE: &str = "/uapi/domestic-stock/v1/quotations/inquire-asking-price";
 const TR_ID_INQUIRE_ASKING_PRICE: &str = "FHKST01010200";
@@ -13,6 +13,9 @@ const PATH_INQUIRE_INVESTOR: &str = "/uapi/domestic-stock/v1/quotations/inquire-
 const TR_ID_INQUIRE_INVESTOR: &str = "FHKST01010600";
 const PATH_INQUIRE_MEMBER: &str = "/uapi/domestic-stock/v1/quotations/inquire-member";
 const TR_ID_INQUIRE_MEMBER: &str = "FHKST01010700";
+const PATH_FOREIGN_INSTITUTION_TOTAL: &str =
+    "/uapi/domestic-stock/v1/quotations/foreign-institution-total";
+const TR_ID_FOREIGN_INSTITUTION_TOTAL: &str = "FHPTJ04400000";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AskingPrice {
@@ -69,6 +72,127 @@ pub struct MemberData {
     pub ntby_qty: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignInstitutionMarket {
+    All,
+    Kospi,
+    Kosdaq,
+}
+
+impl ForeignInstitutionMarket {
+    fn as_code(self) -> &'static str {
+        match self {
+            Self::All => "0000",
+            Self::Kospi => "0001",
+            Self::Kosdaq => "1001",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignInstitutionSortBy {
+    Quantity,
+    Amount,
+}
+
+impl ForeignInstitutionSortBy {
+    fn as_code(self) -> &'static str {
+        match self {
+            Self::Quantity => "0",
+            Self::Amount => "1",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignInstitutionRankSort {
+    NetBuy,
+    NetSell,
+}
+
+impl ForeignInstitutionRankSort {
+    fn as_code(self) -> &'static str {
+        match self {
+            Self::NetBuy => "0",
+            Self::NetSell => "1",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignInstitutionInvestor {
+    All,
+    Foreign,
+    Institution,
+    Etc,
+}
+
+impl ForeignInstitutionInvestor {
+    fn as_code(self) -> &'static str {
+        match self {
+            Self::All => "0",
+            Self::Foreign => "1",
+            Self::Institution => "2",
+            Self::Etc => "3",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForeignInstitutionTotalQuery {
+    pub market: ForeignInstitutionMarket,
+    pub sort_by: ForeignInstitutionSortBy,
+    pub side: ForeignInstitutionRankSort,
+    pub investor: ForeignInstitutionInvestor,
+}
+
+impl Default for ForeignInstitutionTotalQuery {
+    fn default() -> Self {
+        Self {
+            market: ForeignInstitutionMarket::All,
+            sort_by: ForeignInstitutionSortBy::Amount,
+            side: ForeignInstitutionRankSort::NetBuy,
+            investor: ForeignInstitutionInvestor::All,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ForeignInstitutionTotalItem {
+    #[serde(default)]
+    pub hts_kor_isnm: String,
+    #[serde(default)]
+    pub mksc_shrn_iscd: String,
+    #[serde(default)]
+    pub ntby_qty: String,
+    #[serde(default)]
+    pub frgn_ntby_qty: String,
+    #[serde(default)]
+    pub orgn_ntby_qty: String,
+    #[serde(default)]
+    pub frgn_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub orgn_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub etc_orgt_ntby_vol: String,
+    #[serde(default)]
+    pub etc_corp_ntby_vol: String,
+    #[serde(default)]
+    pub etc_orgt_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub etc_corp_ntby_tr_pbmn: String,
+    #[serde(default)]
+    pub stck_prpr: String,
+    #[serde(default)]
+    pub acml_vol: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ForeignInstitutionTotalEnvelope {
+    #[serde(rename = "Output", alias = "output")]
+    output: Vec<ForeignInstitutionTotalItem>,
+}
+
 pub async fn get_asking_price<C>(client: &C, stock_code: &str) -> Result<AskingPrice>
 where
     C: ApiClient + Sync,
@@ -115,6 +239,58 @@ where
         .get_json(PATH_INQUIRE_MEMBER, TR_ID_INQUIRE_MEMBER, &params)
         .await?;
     parse_output(response, "member")
+}
+
+pub async fn get_foreign_institution_total<C>(
+    client: &C,
+    query: ForeignInstitutionTotalQuery,
+) -> Result<Vec<ForeignInstitutionTotalItem>>
+where
+    C: ApiClient + Sync,
+{
+    let params = foreign_institution_total_params(query);
+    let response = client
+        .get_json(
+            PATH_FOREIGN_INSTITUTION_TOTAL,
+            TR_ID_FOREIGN_INSTITUTION_TOTAL,
+            &params,
+        )
+        .await?;
+    parse_foreign_institution_total(response)
+}
+
+fn foreign_institution_total_params(
+    query: ForeignInstitutionTotalQuery,
+) -> HashMap<String, String> {
+    HashMap::from([
+        (
+            "FID_INPUT_ISCD".to_string(),
+            query.market.as_code().to_string(),
+        ),
+        ("FID_COND_MRKT_DIV_CODE".to_string(), "V".to_string()),
+        ("FID_COND_SCR_DIV_CODE".to_string(), "16449".to_string()),
+        (
+            "FID_DIV_CLS_CODE".to_string(),
+            query.sort_by.as_code().to_string(),
+        ),
+        (
+            "FID_RANK_SORT_CLS_CODE".to_string(),
+            query.side.as_code().to_string(),
+        ),
+        (
+            "FID_ETC_CLS_CODE".to_string(),
+            query.investor.as_code().to_string(),
+        ),
+    ])
+}
+
+fn parse_foreign_institution_total(
+    value: serde_json::Value,
+) -> Result<Vec<ForeignInstitutionTotalItem>> {
+    ensure_success(&value, "foreign institution total")?;
+    let envelope: ForeignInstitutionTotalEnvelope =
+        serde_json::from_value(value).context("parsing foreign institution total response")?;
+    Ok(envelope.output)
 }
 
 fn stock_params(stock_code: &str) -> HashMap<String, String> {
@@ -285,6 +461,96 @@ mod tests {
 
         let members = get_members(&members, "005930").await.unwrap();
         assert_eq!(members[0].memb_nm, "한국투자");
+    }
+
+    #[tokio::test]
+    async fn gets_foreign_institution_total_ranking() {
+        let call = Arc::new(Mutex::new(None));
+        let client = MockClient {
+            response: json!({
+                "rt_cd": "0",
+                "msg_cd": "MCA00000",
+                "msg1": "정상처리",
+                "Output": [{
+                    "hts_kor_isnm": "삼성전자",
+                    "mksc_shrn_iscd": "005930",
+                    "ntby_qty": "1000",
+                    "frgn_ntby_qty": "600",
+                    "orgn_ntby_qty": "400",
+                    "frgn_ntby_tr_pbmn": "42000000",
+                    "orgn_ntby_tr_pbmn": "28000000",
+                    "stck_prpr": "70000",
+                    "acml_vol": "1234567"
+                }]
+            }),
+            call: call.clone(),
+        };
+
+        let items = get_foreign_institution_total(
+            &client,
+            ForeignInstitutionTotalQuery {
+                market: ForeignInstitutionMarket::Kosdaq,
+                sort_by: ForeignInstitutionSortBy::Amount,
+                side: ForeignInstitutionRankSort::NetSell,
+                investor: ForeignInstitutionInvestor::Institution,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(items[0].hts_kor_isnm, "삼성전자");
+        assert_eq!(items[0].mksc_shrn_iscd, "005930");
+        assert_eq!(items[0].frgn_ntby_tr_pbmn, "42000000");
+
+        let call = call.lock().unwrap().clone().unwrap();
+        assert_eq!(call.path, PATH_FOREIGN_INSTITUTION_TOTAL);
+        assert_eq!(call.tr_id, TR_ID_FOREIGN_INSTITUTION_TOTAL);
+        assert_eq!(call.params["FID_INPUT_ISCD"], "1001");
+        assert_eq!(call.params["FID_COND_MRKT_DIV_CODE"], "V");
+        assert_eq!(call.params["FID_COND_SCR_DIV_CODE"], "16449");
+        assert_eq!(call.params["FID_DIV_CLS_CODE"], "1");
+        assert_eq!(call.params["FID_RANK_SORT_CLS_CODE"], "1");
+        assert_eq!(call.params["FID_ETC_CLS_CODE"], "2");
+    }
+
+    #[test]
+    fn parses_foreign_institution_total_lowercase_output_alias() {
+        let items = parse_foreign_institution_total(json!({
+            "rt_cd": "0",
+            "msg_cd": "MCA00000",
+            "msg1": "정상처리",
+            "output": [{
+                "hts_kor_isnm": "삼성전자",
+                "mksc_shrn_iscd": "005930"
+            }]
+        }))
+        .unwrap();
+
+        assert_eq!(items[0].hts_kor_isnm, "삼성전자");
+        assert_eq!(items[0].mksc_shrn_iscd, "005930");
+    }
+
+    #[test]
+    fn parses_foreign_institution_total_etc_ranking_fields() {
+        let items = parse_foreign_institution_total(json!({
+            "rt_cd": "0",
+            "msg_cd": "MCA00000",
+            "msg1": "정상처리",
+            "Output": [{
+                "hts_kor_isnm": "기타상위",
+                "mksc_shrn_iscd": "000001",
+                "etc_orgt_ntby_vol": "12",
+                "etc_corp_ntby_vol": "34",
+                "etc_orgt_ntby_tr_pbmn": "5600",
+                "etc_corp_ntby_tr_pbmn": "7800"
+            }]
+        }))
+        .unwrap();
+
+        assert_eq!(items[0].etc_orgt_ntby_vol, "12");
+        assert_eq!(items[0].etc_corp_ntby_vol, "34");
+        assert_eq!(items[0].etc_orgt_ntby_tr_pbmn, "5600");
+        assert_eq!(items[0].etc_corp_ntby_tr_pbmn, "7800");
     }
 
     #[tokio::test]
