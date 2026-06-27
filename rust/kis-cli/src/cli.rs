@@ -148,6 +148,70 @@ pub enum QuoteCommand {
     Investor(SymbolArgs),
     #[command(about = "회원사별 매매동향")]
     Member(SymbolArgs),
+    #[command(about = "외국인/기관 순매수·순매도 랭킹")]
+    ForeignInstitution(ForeignInstitutionArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ForeignInstitutionArgs {
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionMarketArg::All,
+        help = "시장 구분: all, kospi, kosdaq"
+    )]
+    pub market: ForeignInstitutionMarketArg,
+
+    #[arg(
+        long = "sort-by",
+        value_enum,
+        default_value_t = ForeignInstitutionSortByArg::Amount,
+        help = "정렬 기준: qty, amount"
+    )]
+    pub sort_by: ForeignInstitutionSortByArg,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionSideArg::NetBuy,
+        help = "순매수/순매도 구분: net-buy, net-sell"
+    )]
+    pub side: ForeignInstitutionSideArg,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ForeignInstitutionInvestorArg::All,
+        help = "투자자 구분: all, foreign, institution, etc"
+    )]
+    pub investor: ForeignInstitutionInvestorArg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionMarketArg {
+    All,
+    Kospi,
+    Kosdaq,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionSortByArg {
+    Qty,
+    Amount,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionSideArg {
+    NetBuy,
+    NetSell,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ForeignInstitutionInvestorArg {
+    All,
+    Foreign,
+    Institution,
+    Etc,
 }
 
 #[derive(Debug, Args)]
@@ -347,10 +411,18 @@ pub struct ReserveCancelOrderArgs {
     )]
     pub region: ReservationCancelRegion,
 
-    #[arg(long = "receipt-date", required = true, help = "예약주문 접수일자 (YYYYMMDD)")]
+    #[arg(
+        long = "receipt-date",
+        required = true,
+        help = "예약주문 접수일자 (YYYYMMDD)"
+    )]
     pub receipt_date: String,
 
-    #[arg(long = "reservation-order-no", required = true, help = "해외 예약주문번호")]
+    #[arg(
+        long = "reservation-order-no",
+        required = true,
+        help = "해외 예약주문번호"
+    )]
     pub reservation_order_no: String,
 }
 
@@ -464,7 +536,11 @@ pub struct OverseasPeriodProfitArgs {
     #[arg(long, required = true, help = "조회종료일 (YYYYMMDD)")]
     pub end: String,
 
-    #[arg(long = "currency-type", default_value = "01", help = "원화외화구분코드")]
+    #[arg(
+        long = "currency-type",
+        default_value = "01",
+        help = "원화외화구분코드"
+    )]
     pub currency_type: String,
 }
 
@@ -487,7 +563,11 @@ pub struct OverseasPeriodTransArgs {
     #[arg(long, default_value = "", help = "종목코드 (기본: 전체)")]
     pub stock: String,
 
-    #[arg(long = "side", default_value = "00", help = "매도매수구분 (00:전체, 01:매도, 02:매수)")]
+    #[arg(
+        long = "side",
+        default_value = "00",
+        help = "매도매수구분 (00:전체, 01:매도, 02:매수)"
+    )]
     pub side: String,
 
     #[arg(long = "loan-type", default_value = "", help = "대출구분코드")]
@@ -741,7 +821,11 @@ pub struct WsStreamArgs {
     #[arg(long, default_value_t = 1, help = "수집할 메시지 개수")]
     pub count: usize,
 
-    #[arg(long = "timeout-secs", default_value_t = 30, help = "연결/수신 타임아웃(초)")]
+    #[arg(
+        long = "timeout-secs",
+        default_value_t = 30,
+        help = "연결/수신 타임아웃(초)"
+    )]
     pub timeout_secs: u64,
 
     #[arg(long = "reconnects", default_value_t = 2, help = "재연결 시도 횟수")]
@@ -753,9 +837,10 @@ mod tests {
     use clap::Parser;
 
     use super::{
-        BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand, InfoCommand,
-        MarketCommand, OrderCommand, OutputFormat, QuoteCommand, ReservationCancelRegion,
-        ReservationRegion, WsCommand,
+        BalanceArgs, BalanceCommand, ChartCommand, Cli, Command, FinanceCommand,
+        ForeignInstitutionInvestorArg, ForeignInstitutionMarketArg, ForeignInstitutionSideArg,
+        ForeignInstitutionSortByArg, InfoCommand, MarketCommand, OrderCommand, OutputFormat,
+        QuoteCommand, ReservationCancelRegion, ReservationRegion, WsCommand,
     };
 
     #[test]
@@ -1106,6 +1191,35 @@ mod tests {
         };
 
         assert_eq!(args.stock, "005930");
+    }
+
+    #[test]
+    fn parses_quote_foreign_institution_command() {
+        let cli = Cli::try_parse_from([
+            "kis",
+            "quote",
+            "foreign-institution",
+            "--market",
+            "kosdaq",
+            "--sort-by",
+            "amount",
+            "--side",
+            "net-sell",
+            "--investor",
+            "institution",
+        ])
+        .unwrap();
+        let Command::Quote(args) = cli.command else {
+            panic!("expected quote command");
+        };
+        let QuoteCommand::ForeignInstitution(args) = args.command else {
+            panic!("expected quote foreign-institution command");
+        };
+
+        assert_eq!(args.market, ForeignInstitutionMarketArg::Kosdaq);
+        assert_eq!(args.sort_by, ForeignInstitutionSortByArg::Amount);
+        assert_eq!(args.side, ForeignInstitutionSideArg::NetSell);
+        assert_eq!(args.investor, ForeignInstitutionInvestorArg::Institution);
     }
 
     #[test]

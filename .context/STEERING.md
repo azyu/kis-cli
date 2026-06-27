@@ -2,7 +2,7 @@
 
 ## Current Direction
 
-저장소는 `kis-core` + `kis-cli` 2-crate Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 `kis-core`가 config/auth/client/ws와 국내/해외 도메인 API를 함께 소유한다. 지원 표면은 국내 price/order/balance/read APIs, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력까지 포함한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
+저장소는 `kis-core` + `kis-cli` 2-crate Rust workspace를 공식 구현으로 유지한다. 현재 공식 CLI 진입점은 `kis`이며 `kis-core`가 config/auth/client/ws와 국내/해외 도메인 API를 함께 소유한다. 지원 표면은 국내 price/order/balance/read APIs, 국내 외국인/기관 매매종목 가집계 랭킹, 국내 시간외 REST, 해외 price/order/balance/execution, 해외 예약주문/예약취소/기간손익/기간거래/매수가능금액, WebSocket approval/시간외 실시간 시세 1차, config 출력까지 포함한다. 검증은 `cargo test --manifest-path rust/Cargo.toml` 기준으로 유지한다.
 
 Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rust-only로 정리했다. 설정 파일 기본 위치는 `~/.config/kis/config.yaml`로 유지하고, 기존 `~/.kis/config.yaml` fallback은 제공하지 않는다. 토큰 캐시 경로는 별도 마일스톤 전까지 유지한다. 현재 crate/module 경계의 기술 기준 문서는 `docs/SPEC.md`다.
 

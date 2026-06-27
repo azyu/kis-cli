@@ -1,10 +1,10 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{
     error::Error as StdError,
     fmt::{Display, Formatter},
 };
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use kis_cli::{cli, render};
@@ -291,10 +291,7 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
 
             let output = render::render_pairs(&[
                 ("종목명", display_or_dash(&item.bstp_kor_isnm)),
-                (
-                    "현재가",
-                    display_or_dash(&item.ovtm_untp_prpr),
-                ),
+                ("현재가", display_or_dash(&item.ovtm_untp_prpr)),
                 (
                     "전일대비",
                     format!(
@@ -317,7 +314,8 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
             writeln!(writer, "{output}")?;
         }
         cli::QuoteCommand::OvertimeAsk(args) => {
-            let ask = overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
+            let ask =
+                overtime::get_overtime_asking_price(&runtime.client, "J", &args.stock).await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &ask);
             }
@@ -411,6 +409,48 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
                 .map(|item| vec![item.memb_nm, item.seln_vol, item.shnu_vol, item.ntby_qty])
                 .collect::<Vec<_>>();
             let table = render::render_table(&["회원사", "매도수량", "매수수량", "순매수"], &rows);
+            writeln!(writer, "{table}")?;
+        }
+        cli::QuoteCommand::ForeignInstitution(args) => {
+            let items = quote::get_foreign_institution_total(
+                &runtime.client,
+                foreign_institution_query(args),
+            )
+            .await?;
+            if runtime.output_json {
+                return write_command_json(writer, runtime.command_name, &items);
+            }
+
+            let rows = items
+                .into_iter()
+                .map(|item| {
+                    vec![
+                        item.hts_kor_isnm,
+                        item.mksc_shrn_iscd,
+                        item.stck_prpr,
+                        item.ntby_qty,
+                        item.frgn_ntby_qty,
+                        item.orgn_ntby_qty,
+                        item.frgn_ntby_tr_pbmn,
+                        item.orgn_ntby_tr_pbmn,
+                        item.acml_vol,
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let table = render::render_table(
+                &[
+                    "종목명",
+                    "코드",
+                    "현재가",
+                    "순매수",
+                    "외국인순매수",
+                    "기관순매수",
+                    "외국인대금",
+                    "기관대금",
+                    "거래량",
+                ],
+                &rows,
+            );
             writeln!(writer, "{table}")?;
         }
     }
@@ -1613,9 +1653,18 @@ async fn run_balance(
                     ("재사용가능", display_or_dash(&result.sll_ruse_psbl_amt)),
                     ("해외주문가능", display_or_dash(&result.ovrs_ord_psbl_amt)),
                     ("주문가능수량", display_or_dash(&result.ord_psbl_qty)),
-                    ("최대주문가능수량", display_or_dash(&result.max_ord_psbl_qty)),
-                    ("환전후가능금액", display_or_dash(&result.echm_af_ord_psbl_amt)),
-                    ("환전후가능수량", display_or_dash(&result.echm_af_ord_psbl_qty)),
+                    (
+                        "최대주문가능수량",
+                        display_or_dash(&result.max_ord_psbl_qty),
+                    ),
+                    (
+                        "환전후가능금액",
+                        display_or_dash(&result.echm_af_ord_psbl_amt),
+                    ),
+                    (
+                        "환전후가능수량",
+                        display_or_dash(&result.echm_af_ord_psbl_qty),
+                    ),
                     ("환율", display_or_dash(&result.exrt)),
                 ]);
                 writeln!(writer, "{output}")?;
@@ -2824,6 +2873,36 @@ fn json_string_alias(value: &Value, keys: &[&str]) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string()
+}
+
+fn foreign_institution_query(
+    args: cli::ForeignInstitutionArgs,
+) -> quote::ForeignInstitutionTotalQuery {
+    quote::ForeignInstitutionTotalQuery {
+        market: match args.market {
+            cli::ForeignInstitutionMarketArg::All => quote::ForeignInstitutionMarket::All,
+            cli::ForeignInstitutionMarketArg::Kospi => quote::ForeignInstitutionMarket::Kospi,
+            cli::ForeignInstitutionMarketArg::Kosdaq => quote::ForeignInstitutionMarket::Kosdaq,
+        },
+        sort_by: match args.sort_by {
+            cli::ForeignInstitutionSortByArg::Qty => quote::ForeignInstitutionSortBy::Quantity,
+            cli::ForeignInstitutionSortByArg::Amount => quote::ForeignInstitutionSortBy::Amount,
+        },
+        side: match args.side {
+            cli::ForeignInstitutionSideArg::NetBuy => quote::ForeignInstitutionRankSort::NetBuy,
+            cli::ForeignInstitutionSideArg::NetSell => quote::ForeignInstitutionRankSort::NetSell,
+        },
+        investor: match args.investor {
+            cli::ForeignInstitutionInvestorArg::All => quote::ForeignInstitutionInvestor::All,
+            cli::ForeignInstitutionInvestorArg::Foreign => {
+                quote::ForeignInstitutionInvestor::Foreign
+            }
+            cli::ForeignInstitutionInvestorArg::Institution => {
+                quote::ForeignInstitutionInvestor::Institution
+            }
+            cli::ForeignInstitutionInvestorArg::Etc => quote::ForeignInstitutionInvestor::Etc,
+        },
+    }
 }
 
 fn price_sign(code: &str) -> &'static str {
