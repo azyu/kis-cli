@@ -83,6 +83,7 @@ kis quote ask 005930
 kis quote overtime-price 005930
 kis quote overtime-ask 005930
 kis quote ccnl 005930
+kis --env real --json quote foreign-institution --market all --sort-by amount --side net-buy --investor all
 kis chart daily 005930 --start 20260101 --end 20260306
 kis chart time 005930 --unit 5
 kis chart index-price 0001
@@ -187,7 +188,7 @@ kis config --quiet
 ## 지원 표면
 
 - `price`: 국내 현재가/일별시세, 해외 현재가
-- `quote`: 호가, 시간외 현재가/호가, 체결, 투자자, 회원사
+- `quote`: 호가, 시간외 현재가/호가, 체결, 투자자, 회원사, 외국인/기관 매매종목 가집계 랭킹
 - `chart`: 일별 차트, 분별 차트, 지수 차트, 지수 현재가
 - `order`: 국내 매수/매도/정정/취소, 해외 매수/매도/정정/취소, 해외 예약주문, 예약취소(미국만), 미국 주간주문/정정/취소
 - `balance`: 국내 잔고/매수가능/매도가능/일별체결, 해외 잔고/체결기준현재잔고/결제기준잔고/주문체결/미체결, 매수가능금액, 기간손익/기간거래, 지정가체결, 예약주문 조회(us/asia)
@@ -198,6 +199,8 @@ kis config --quiet
 - `config`: 현재 설정 출력
 
 모의투자(`virtual`)에서는 일부 국내 읽기 API가 KIS 측 제한으로 `404` 또는 `EGW2004`를 반환할 수 있습니다.
+
+`quote foreign-institution`은 KIS `foreign-institution-total` 가집계 API를 사용합니다. 기본값은 전체 시장(`all`), 금액 정렬(`amount`), 순매수 상위(`net-buy`), 전체 투자자(`all`)이며, KIS 문서 기준 장중 가집계와 장마감 후 확정치 성격의 데이터입니다.
 
 ## 글로벌 플래그
 
