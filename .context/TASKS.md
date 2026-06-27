@@ -53,6 +53,7 @@
 - [x] 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 변경 (fallback 없음) — Agent: Main
 - [x] 국내 외국인/기관 매매종목 가집계 랭킹 CLI 추가 (`quote foreign-institution`) — Agent: Main
 - [x] 커밋 후 format/lint/test/build 로컬 검증 규칙을 AGENTS.md에 추가 — Agent: Main
+- [x] v0.1.2 배포 준비: tag push 릴리스 트리거와 crate 버전 동기화 — Agent: Main
 
 ## In Progress
 - [x] 작업 컨텍스트 문서 경로를 `.claude/`에서 `.context/`로 이전 — Agent: Main

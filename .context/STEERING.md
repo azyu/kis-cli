@@ -51,7 +51,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 - 2026-03-08: 저장소 작업 완료 기준은 `AGENTS.md`의 DoD를 따른다. 작업은 `main`에서 분기한 브랜치에서 시작하고, 논리적 단계별 커밋 후 원격 push와 PR 작성까지를 기본 후속 절차로 명시한다.
 - 2026-06-27: PR 브랜치 push 전 각 커밋 후 `cargo fmt --manifest-path rust/Cargo.toml --all --check`, `cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings`, `cargo test --manifest-path rust/Cargo.toml`, `cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release`를 로컬에서 실행한다. 실패 시 수정 커밋 또는 커밋 보정 후 같은 검증을 반복한다.
 - 2026-03-07: `release-build.yml`은 5개 자산(`linux amd64`, `linux arm64`, `macOS arm64`, `Windows x64`, `Windows arm64`)을 matrix로 빌드한다. Linux/macOS는 `tar.gz`, Windows는 `zip`으로 패키징하고, release job은 두 형식 모두에 대한 `checksums.txt`를 생성한다.
-- 2026-03-07: GitHub Actions는 `bb-cli`와 같은 최소 패턴을 유지하되, `release-build.yml`은 수동 `release_tag` 입력으로 platform matrix 자산과 `checksums.txt`를 GitHub Release에 업로드한다. Homebrew tap/formula 자동화는 이 마일스톤에 포함하지 않는다.
+- 2026-06-27: `release-build.yml`은 수동 `release_tag` 입력과 `v*.*.*` tag push 모두 지원한다. 두 경로 모두 `RELEASE_TAG` 환경값으로 checkout, archive naming, GitHub Release 생성/업로드를 수행한다.
 - 2026-03-07: Rust workspace를 `kis-core` + `kis-cli` 2-crate 구조로 단순화하고, 기존 `kis-api` crate는 `kis-core` 내부 모듈(`api_client`, `domestic`, `overseas`)로 흡수했다. 현재 구조 기준 문서는 `docs/SPEC.md`로 유지한다.
 - 2026-03-07: `kis order reserve-cancel`은 검증된 TR ID가 있는 미국 예약취소만 지원한다. `balance reserve-orders`는 기존대로 `us|asia` 조회를 유지하고, Asia 예약취소는 TR ID가 확인되기 전까지 CLI에서 노출하지 않는다.
 - 2026-03-07: 기본 설정 파일 경로를 `~/.config/kis/config.yaml`로 전환하고, 기존 `~/.kis/config.yaml` fallback은 두지 않는다. 이번 변경 범위는 설정 파일 경로에 한정하고 토큰 캐시는 유지한다.

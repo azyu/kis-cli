@@ -1,6 +1,9 @@
 name: Release Build
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -10,6 +13,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
 
 jobs:
   build:
@@ -54,13 +60,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Validate release tag format
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
+          TAG="${RELEASE_TAG}"
           if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid release tag: ${TAG}"
             echo "Expected format: vMAJOR.MINOR.PATCH (example: v0.1.0)"
@@ -88,7 +94,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.release_tag }}"
+          VERSION="${RELEASE_TAG}"
           VERSION="${VERSION#v}"
           ARCHIVE_NAME="kis_${VERSION}_${{ matrix.asset_name }}"
 
@@ -102,7 +108,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = "${{ inputs.release_tag }}".TrimStart("v")
+          $version = "${env:RELEASE_TAG}".TrimStart("v")
           $archiveName = "kis_${version}_${{ matrix.asset_name }}"
 
           New-Item -ItemType Directory -Force -Path staging | Out-Null
@@ -144,7 +150,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
+          TAG="${RELEASE_TAG}"
 
           if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${TAG}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
