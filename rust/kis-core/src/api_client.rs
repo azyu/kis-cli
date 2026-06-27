@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::client::{JsonResponse, KisClient};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use crate::client::{JsonResponse, KisClient};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -194,9 +194,9 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
+    use crate::client::JsonResponse;
     use anyhow::Result;
     use async_trait::async_trait;
-    use crate::client::JsonResponse;
     use serde_json::{Value, json};
 
     use super::{ApiClient, ensure_success, parse_output, parse_outputs};

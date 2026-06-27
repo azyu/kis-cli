@@ -188,10 +188,10 @@ impl TokenManager {
     }
 
     fn save_cached_token(&self, token: &str, expires_at: DateTime<Utc>) {
-        if let Some(parent) = self.cache_path.parent() {
-            if fs::create_dir_all(parent).is_err() {
-                return;
-            }
+        if let Some(parent) = self.cache_path.parent()
+            && fs::create_dir_all(parent).is_err()
+        {
+            return;
         }
 
         let cached = CachedToken {

@@ -43,6 +43,8 @@
 
 - 모든 작업은 `main`에서 분기한 작업 브랜치에서 시작한다
 - 커밋은 논리적 단계별로 나누고 Conventional Commits 형식을 유지한다
+- 각 커밋 후 push 전에는 반드시 로컬 검증을 실행한다: `cargo fmt --manifest-path rust/Cargo.toml --all --check`, `cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings`, `cargo test --manifest-path rust/Cargo.toml`, `cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release`
+- 커밋 후 검증에서 format/lint/test/build 중 하나라도 실패하면 수정 커밋을 추가하거나 기존 커밋을 보정한 뒤 같은 검증을 다시 실행한다
 - DoD를 충족하면 현재 작업 브랜치를 원격에 push한다
 - push 후 변경 요약, 검증 결과, 남은 리스크를 포함한 PR을 작성한다
 

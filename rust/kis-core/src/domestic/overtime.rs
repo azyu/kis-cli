@@ -369,7 +369,12 @@ mod tests {
             call: Arc::new(Mutex::new(None)),
         };
 
-        let err = get_overtime_price(&client, "J", "005930").await.unwrap_err();
-        assert_eq!(err.to_string(), "overtime price API error: [EGW00001] 잘못된 요청");
+        let err = get_overtime_price(&client, "J", "005930")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "overtime price API error: [EGW00001] 잘못된 요청"
+        );
     }
 }

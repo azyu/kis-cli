@@ -174,10 +174,7 @@ fn resolve_config_path(cli_config: Option<&Path>) -> Result<PathBuf> {
     }
 
     let home = dirs::home_dir().context("determining home directory")?;
-    Ok(PathBuf::from(home)
-        .join(".config")
-        .join("kis")
-        .join("config.yaml"))
+    Ok(home.join(".config").join("kis").join("config.yaml"))
 }
 
 async fn run_price(runtime: &Runtime, args: cli::PriceArgs, writer: &mut dyn Write) -> Result<()> {
@@ -413,9 +410,11 @@ async fn run_quote(runtime: &Runtime, args: cli::QuoteArgs, writer: &mut dyn Wri
         }
         cli::QuoteCommand::ForeignInstitution(args) => {
             let investor = args.investor;
-            let items =
-                quote::get_foreign_institution_total(&runtime.client, foreign_institution_query(args))
-                    .await?;
+            let items = quote::get_foreign_institution_total(
+                &runtime.client,
+                foreign_institution_query(args),
+            )
+            .await?;
             if runtime.output_json {
                 return write_command_json(writer, runtime.command_name, &items);
             }
