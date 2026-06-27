@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::api_client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, ensure_success, parse_output};
 
 const PATH_INQUIRE_ASKING_PRICE: &str = "/uapi/domestic-stock/v1/quotations/inquire-asking-price";
 const TR_ID_INQUIRE_ASKING_PRICE: &str = "FHKST01010200";
@@ -179,6 +179,12 @@ pub struct ForeignInstitutionTotalItem {
     pub acml_vol: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ForeignInstitutionTotalEnvelope {
+    #[serde(rename = "Output", alias = "output")]
+    output: Vec<ForeignInstitutionTotalItem>,
+}
+
 pub async fn get_asking_price<C>(client: &C, stock_code: &str) -> Result<AskingPrice>
 where
     C: ApiClient + Sync,
@@ -242,7 +248,7 @@ where
             &params,
         )
         .await?;
-    parse_output(response, "foreign institution total")
+    parse_foreign_institution_total(response)
 }
 
 fn foreign_institution_total_params(
@@ -253,6 +259,8 @@ fn foreign_institution_total_params(
             "FID_INPUT_ISCD".to_string(),
             query.market.as_code().to_string(),
         ),
+        ("FID_COND_MRKT_DIV_CODE".to_string(), "V".to_string()),
+        ("FID_COND_SCR_DIV_CODE".to_string(), "16449".to_string()),
         (
             "FID_DIV_CLS_CODE".to_string(),
             query.sort_by.as_code().to_string(),
@@ -266,6 +274,15 @@ fn foreign_institution_total_params(
             query.investor.as_code().to_string(),
         ),
     ])
+}
+
+fn parse_foreign_institution_total(
+    value: serde_json::Value,
+) -> Result<Vec<ForeignInstitutionTotalItem>> {
+    ensure_success(&value, "foreign institution total")?;
+    let envelope: ForeignInstitutionTotalEnvelope =
+        serde_json::from_value(value).context("parsing foreign institution total response")?;
+    Ok(envelope.output)
 }
 
 fn stock_params(stock_code: &str) -> HashMap<String, String> {
@@ -446,7 +463,7 @@ mod tests {
                 "rt_cd": "0",
                 "msg_cd": "MCA00000",
                 "msg1": "정상처리",
-                "output": [{
+                "Output": [{
                     "hts_kor_isnm": "삼성전자",
                     "mksc_shrn_iscd": "005930",
                     "ntby_qty": "1000",
@@ -481,9 +498,28 @@ mod tests {
         assert_eq!(call.path, PATH_FOREIGN_INSTITUTION_TOTAL);
         assert_eq!(call.tr_id, TR_ID_FOREIGN_INSTITUTION_TOTAL);
         assert_eq!(call.params["FID_INPUT_ISCD"], "1001");
+        assert_eq!(call.params["FID_COND_MRKT_DIV_CODE"], "V");
+        assert_eq!(call.params["FID_COND_SCR_DIV_CODE"], "16449");
         assert_eq!(call.params["FID_DIV_CLS_CODE"], "1");
         assert_eq!(call.params["FID_RANK_SORT_CLS_CODE"], "1");
         assert_eq!(call.params["FID_ETC_CLS_CODE"], "2");
+    }
+
+    #[test]
+    fn parses_foreign_institution_total_lowercase_output_alias() {
+        let items = parse_foreign_institution_total(json!({
+            "rt_cd": "0",
+            "msg_cd": "MCA00000",
+            "msg1": "정상처리",
+            "output": [{
+                "hts_kor_isnm": "삼성전자",
+                "mksc_shrn_iscd": "005930"
+            }]
+        }))
+        .unwrap();
+
+        assert_eq!(items[0].hts_kor_isnm, "삼성전자");
+        assert_eq!(items[0].mksc_shrn_iscd, "005930");
     }
 
     #[tokio::test]
