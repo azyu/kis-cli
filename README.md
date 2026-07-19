@@ -4,7 +4,17 @@
 
 ## 설치
 
-Rust toolchain이 준비되어 있다면 release 바이너리를 바로 빌드할 수 있습니다.
+[GitHub Releases](https://github.com/azyu/kis-cli/releases/latest)는 Debian/Ubuntu용 `linux_amd64`와 `linux_arm64` 압축 파일을 제공합니다. Linux 산출물은 릴리즈 전에 Debian 12와 Ubuntu 22.04에서 실행 검증합니다.
+
+압축을 푼 뒤 바이너리를 설치합니다.
+
+```bash
+tar -xzf kis_*_linux_amd64.tar.gz # ARM64는 linux_arm64
+install -m 755 kis ~/.local/bin/kis
+kis --help
+```
+
+소스에서 빌드하려면 Rust toolchain이 필요합니다.
 
 ```bash
 cargo build --manifest-path rust/Cargo.toml -p kis-cli --release --bin kis
