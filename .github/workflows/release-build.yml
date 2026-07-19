@@ -89,6 +89,20 @@ jobs:
           set -euo pipefail
           cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release --target "${{ matrix.target }}"
 
+      - name: Verify Debian and Ubuntu compatibility
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BINARY_DIR="${GITHUB_WORKSPACE}/rust/target/${{ matrix.target }}/release"
+
+          for image in debian:12-slim ubuntu:22.04; do
+            docker run --rm \
+              --volume "${BINARY_DIR}:/release:ro" \
+              "${image}" \
+              /release/${{ matrix.binary_name }} --help >/dev/null
+          done
+
       - name: Package archive (unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -142,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum *.tar.gz *.zip | sort -k2 > checksums.txt
+          sha256sum -- *.tar.gz *.zip | sort -k2 > checksums.txt
 
       - name: Create or update release
         shell: bash
