@@ -71,6 +71,7 @@
 - [x] GitHub Actions 추가 (`ci`, `release-build`) — Agent: Main
 - [x] GitHub release target 확대 (`linux amd64`, `macOS arm64`, `Windows x64`, `Windows arm64`) — Agent: Main
 - [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
+- [x] GitHub release의 Debian/Ubuntu Linux 지원 검토 및 보강 — Agent: Main
 
 ## Backlog
 - [ ] `reqwest` 0.13 업그레이드 (Windows release 빌드에서 `aws-lc-rs` 확인 후) — Agent: Core
