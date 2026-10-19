@@ -25,7 +25,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Coordination Rules
 
-- 한 에이전트가 여러 역할을 겸할 수 있으나, 작업 시작 시 TASKS.md에 진행 상태를 기록한다
+- 한 에이전트가 여러 역할을 겸할 수 있으나, 작업 시작 시 해당 GitHub Issue에 진행 상태를 남긴다
 - 동일 파일을 두 에이전트가 동시에 수정하지 않는다
 - 의존성이 있는 작업은 순서를 지킨다: Core -> Domain -> CLI -> Quality
 - 작업 완료 기준과 후속 Git/PR 절차는 `AGENTS.md`의 DoD 규칙을 따른다
@@ -47,6 +47,7 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
+- 2026-10-20: 작업 목록을 `.context/TASKS.md`에서 GitHub Issues로 이전했다. 미완료 backlog 7건을 #9~#15로 등록하고 파일을 삭제했다. 완료 항목 이력은 git 히스토리로 남긴다.
 - 2026-10-19: 의존성 정리. `serde_yaml`(deprecated, `unsafe-libyaml` 유지보수 중단)을 `serde-saphyr`로 교체했다. `serde-saphyr`는 기본 설정에서 파싱 오류에 설정 파일 원문 snippet을 붙여 `app_secret`이 stderr에 노출되므로 `with_snippet: false`로 고정하고 회귀 테스트(`rejects_malformed_yaml`)로 보호한다. YAML 파서를 바꿀 때는 오류 메시지에 원문이 포함되는지 먼저 확인한다.
 - 2026-10-19: `reqwest` 0.13 업그레이드는 보류한다. 0.13의 `rustls` feature는 `aws-lc-rs`(C/asm 빌드)와 OS 인증서 저장소를 쓰므로 `windows-x64`/`windows-arm64` release 빌드 영향을 CI에서 확인하기 전까지 0.12(`ring` + `webpki-roots`)를 유지한다. 0.12.28 기준 OSV 권고는 없다.
 - 2026-10-19: CI(`ci.yml`)에 AGENTS.md 검증 규칙과 같은 `cargo clippy ... -D warnings` 단계를 추가했다.

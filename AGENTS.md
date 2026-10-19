@@ -2,17 +2,17 @@
 
 ## Agent Workflow
 
-**작업 시작 전 반드시 다음 세 파일을 읽는다:**
+**작업 시작 전 반드시 다음을 확인한다:**
 
-1. `.context/TASKS.md` - 현재 진행 중인 작업 목록과 상태
+1. GitHub Issues (`gh issue list`) - 작업 목록과 상태
 2. `.context/STEERING.md` - 작업 방향, 우선순위, 에이전트 간 조율 지침
 3. `docs/SPEC.md` - 현재 Rust 2-crate 아키텍처와 모듈 경계 기술 명세
 
-### TASKS.md 규칙
+### 작업 목록 규칙 (GitHub Issues)
 
-- 각 태스크는 `[ ]` (미완료) / `[x]` (완료) / `[~]` (진행중) 체크박스로 상태를 표시한다
-- 작업을 시작하면 `[~]`로 변경하고, 완료 시 `[x]`로 변경한다
-- 새 태스크가 필요하면 추가하되, 기존 태스크를 임의로 삭제하지 않는다
+- 작업 목록은 GitHub Issues로 관리한다 (기존 `.context/TASKS.md`는 2026-10-20 이슈로 이전 후 삭제)
+- 새 작업이 필요하면 이슈를 만들고, PR 본문에 `Closes #<번호>`로 연결해 완료 처리한다
+- 이슈를 임의로 닫지 않는다
 
 ### STEERING.md 규칙
 
@@ -34,9 +34,9 @@
 ### Definition of Done (DoD)
 
 - 사용자 요청 범위를 충족하는 최소 변경만 반영한다
-- 이번 변경으로 영향받는 문서/명세/협업 문서(`AGENTS.md`, `.context/TASKS.md`, `.context/STEERING.md`, `docs/SPEC.md`)를 필요한 범위에서 함께 갱신한다
+- 이번 변경으로 영향받는 문서/명세/협업 문서(`AGENTS.md`, `.context/STEERING.md`, `docs/SPEC.md`)를 필요한 범위에서 함께 갱신한다
 - 적용한 검증을 실행해 결과를 확인한다. 검증을 실행하지 못했다면 이유와 미실행 범위를 작업 보고에 명시한다
-- 남은 제약, 후속 작업, 운영 결정이 생기면 `.context/TASKS.md` 또는 `.context/STEERING.md`에 기록한다
+- 남은 제약, 후속 작업, 운영 결정이 생기면 GitHub Issue 또는 `.context/STEERING.md`에 기록한다
 - 결과, 검증, 남은 리스크를 사용자에게 보고할 수 있는 상태가 되면 완료로 간주한다
 
 ### Git/PR 절차
@@ -110,7 +110,6 @@
 kis-cli/
 ├── AGENTS.md              # 이 파일
 ├── .context/
-│   ├── TASKS.md           # 작업 목록과 상태
 │   └── STEERING.md        # 방향/우선순위/결정 로그
 ├── docs/
 │   ├── SPEC.md            # Rust 2-crate 기술 명세
