@@ -11,7 +11,7 @@ pub enum KisError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("YAML error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_saphyr::Error),
     #[error("API error [{code}]: {message}")]
     Api { code: String, message: String },
     #[error("parse error: {0}")]

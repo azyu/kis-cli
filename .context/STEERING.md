@@ -47,6 +47,9 @@ Go reference 구현과 관련 운영 문서를 제거해 저장소 기준을 Rus
 
 ## Decisions Log
 
+- 2026-10-19: 의존성 정리. `serde_yaml`(deprecated, `unsafe-libyaml` 유지보수 중단)을 `serde-saphyr`로 교체했다. `serde-saphyr`는 기본 설정에서 파싱 오류에 설정 파일 원문 snippet을 붙여 `app_secret`이 stderr에 노출되므로 `with_snippet: false`로 고정하고 회귀 테스트(`rejects_malformed_yaml`)로 보호한다. YAML 파서를 바꿀 때는 오류 메시지에 원문이 포함되는지 먼저 확인한다.
+- 2026-10-19: `reqwest` 0.13 업그레이드는 보류한다. 0.13의 `rustls` feature는 `aws-lc-rs`(C/asm 빌드)와 OS 인증서 저장소를 쓰므로 `windows-x64`/`windows-arm64` release 빌드 영향을 CI에서 확인하기 전까지 0.12(`ring` + `webpki-roots`)를 유지한다. 0.12.28 기준 OSV 권고는 없다.
+- 2026-10-19: CI(`ci.yml`)에 AGENTS.md 검증 규칙과 같은 `cargo clippy ... -D warnings` 단계를 추가했다.
 - 2026-03-08: 작업 컨텍스트 문서 canonical 경로를 `.context/TASKS.md`, `.context/STEERING.md`로 이동한다. 기존 `.claude/`는 협업 문서 기준 경로로 사용하지 않는다.
 - 2026-03-08: 저장소 작업 완료 기준은 `AGENTS.md`의 DoD를 따른다. 작업은 `main`에서 분기한 브랜치에서 시작하고, 논리적 단계별 커밋 후 원격 push와 PR 작성까지를 기본 후속 절차로 명시한다.
 - 2026-06-27: PR 브랜치 push 전 각 커밋 후 `cargo fmt --manifest-path rust/Cargo.toml --all --check`, `cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings`, `cargo test --manifest-path rust/Cargo.toml`, `cargo build --manifest-path rust/Cargo.toml -p kis-cli --bin kis --release`를 로컬에서 실행한다. 실패 시 수정 커밋 또는 커밋 보정 후 같은 검증을 반복한다.

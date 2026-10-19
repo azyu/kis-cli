@@ -6,7 +6,10 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::time::{Instant, timeout};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{Bytes, Message},
+};
 
 use crate::config::AppConfig;
 use crate::error::{KisError, Result};
@@ -363,7 +366,7 @@ async fn collect_realtime_messages_once(
 
     let subscribe = build_control_message(approval_key, SUBSCRIBE_TYPE, spec.tr_id, tr_key);
     socket
-        .send(Message::Text(subscribe.to_string()))
+        .send(Message::Text(subscribe.to_string().into()))
         .await
         .map_err(|error| KisError::Parse(format!("websocket subscribe failed: {error}")))?;
 
@@ -391,7 +394,7 @@ async fn collect_realtime_messages_once(
                 ParsedMessage::System => {}
                 ParsedMessage::PingPong => {
                     socket
-                        .send(Message::Pong(Vec::new()))
+                        .send(Message::Pong(Bytes::new()))
                         .await
                         .map_err(|error| {
                             KisError::Parse(format!("websocket pong failed: {error}"))
@@ -407,7 +410,7 @@ async fn collect_realtime_messages_once(
                     ParsedMessage::System => {}
                     ParsedMessage::PingPong => {
                         socket
-                            .send(Message::Pong(Vec::new()))
+                            .send(Message::Pong(Bytes::new()))
                             .await
                             .map_err(|error| {
                                 KisError::Parse(format!("websocket pong failed: {error}"))
@@ -428,7 +431,9 @@ async fn collect_realtime_messages_once(
     }
 
     let unsubscribe = build_control_message(approval_key, UNSUBSCRIBE_TYPE, spec.tr_id, tr_key);
-    let _ = socket.send(Message::Text(unsubscribe.to_string())).await;
+    let _ = socket
+        .send(Message::Text(unsubscribe.to_string().into()))
+        .await;
     let _ = socket.close(None).await;
 
     Ok(collected)

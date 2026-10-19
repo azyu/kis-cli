@@ -112,7 +112,11 @@ pub fn load(config_path: Option<&Path>, env_override: Option<&str>) -> Result<Ap
 
 fn read_file_config(path: &Path, allow_missing: bool) -> Result<FileConfig> {
     match fs::read_to_string(path) {
-        Ok(contents) => Ok(serde_yaml::from_str(&contents)?),
+        // Snippets would echo config lines (app_secret) into error output.
+        Ok(contents) => Ok(serde_saphyr::from_str_with_options(
+            &contents,
+            serde_saphyr::options! { with_snippet: false },
+        )?),
         Err(error) if allow_missing && error.kind() == std::io::ErrorKind::NotFound => {
             Ok(FileConfig::default())
         }
@@ -134,7 +138,7 @@ fn default_config_path(config_path: Option<&Path>) -> Result<PathBuf> {
 mod tests {
     use std::fs;
 
-    use super::{Environment, load, read_file_config};
+    use super::{Environment, KisError, load, read_file_config};
 
     #[test]
     fn maps_environment_urls() {
@@ -187,5 +191,45 @@ environment: "virtual"
         assert_eq!(config.account_no, "12345678");
         assert_eq!(config.account_prod, "02");
         assert_eq!(config.environment, Environment::Real);
+    }
+
+    #[test]
+    fn keeps_unquoted_numeric_scalars_verbatim_and_ignores_unknown_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.yaml");
+        fs::write(
+            &path,
+            "app_key: abc\naccount_no: 12345678\naccount_prod: 01\nmy_htsid: someone\n",
+        )
+        .unwrap();
+
+        let file = read_file_config(&path, false).unwrap();
+        assert_eq!(file.app_key.as_deref(), Some("abc"));
+        assert_eq!(file.account_no.as_deref(), Some("12345678"));
+        // Leading zero must survive: "01" is a product code, not the number 1.
+        assert_eq!(file.account_prod.as_deref(), Some("01"));
+    }
+
+    #[test]
+    fn treats_empty_or_comment_only_file_as_empty_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.yaml");
+        for contents in ["", "# only comment\n"] {
+            fs::write(&path, contents).unwrap();
+            let file = read_file_config(&path, false).unwrap();
+            assert!(file.app_key.is_none());
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.yaml");
+        fs::write(&path, "app_secret: SECRET-VALUE\napp_key: [unclosed\n").unwrap();
+
+        let err = read_file_config(&path, false).unwrap_err();
+        assert!(matches!(err, KisError::Yaml(_)));
+        // Parse errors reach stderr, so they must not echo config contents.
+        assert!(!err.to_string().contains("SECRET-VALUE"), "{err}");
     }
 }

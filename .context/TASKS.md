@@ -54,6 +54,7 @@
 - [x] 국내 외국인/기관 매매종목 가집계 랭킹 CLI 추가 (`quote foreign-institution`) — Agent: Main
 - [x] 커밋 후 format/lint/test/build 로컬 검증 규칙을 AGENTS.md에 추가 — Agent: Main
 - [x] v0.1.2 배포 준비: tag push 릴리스 트리거와 crate 버전 동기화 — Agent: Main
+- [x] 의존성 점검 및 정리 (lockfile 보안 패치, `serde_yaml` → `serde-saphyr`, `tokio-tungstenite` 0.30, `dirs` 7, CI clippy) — Agent: Main
 
 ## In Progress
 - [x] 작업 컨텍스트 문서 경로를 `.claude/`에서 `.context/`로 이전 — Agent: Main
@@ -72,6 +73,7 @@
 - [x] GitHub release target 추가 (`linux arm64`) — Agent: Main
 
 ## Backlog
+- [ ] `reqwest` 0.13 업그레이드 (Windows release 빌드에서 `aws-lc-rs` 확인 후) — Agent: Core
 - [x] 해외주식 주문 API 구현 — Agent: Domain
 - [x] 해외주식 잔고/체결 API 구현 — Agent: Domain
 - [ ] 시간외 거래 API 2차 (`overtime_asking_price_krx`, `overtime_fluctuation`, `overtime_volume`) — Agent: Main
