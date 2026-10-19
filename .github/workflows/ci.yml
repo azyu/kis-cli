@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   ci:
-    name: Fmt, Test, Build (ubuntu-latest)
+    name: Fmt, Clippy, Test, Build (ubuntu-latest)
     runs-on: ubuntu-latest
 
     steps:
@@ -21,6 +21,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rustfmt, clippy
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
@@ -29,6 +30,9 @@ jobs:
 
       - name: Format
         run: cargo fmt --manifest-path rust/Cargo.toml --all --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings
 
       - name: Test
         run: cargo test --manifest-path rust/Cargo.toml
