@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use chrono::{Duration, Local};
 use serde::{Deserialize, Serialize};
 
-use crate::api_client::{ApiClient, parse_output};
+use crate::api_client::{ApiClient, ensure_success, parse_output};
 
 const PATH_DIVIDEND: &str = "/uapi/domestic-stock/v1/ksdinfo/dividend";
-const TR_ID_DIVIDEND: &str = "HHKDB669107C0";
+const TR_ID_DIVIDEND: &str = "HHKDB669102C0";
 const PATH_NEWS: &str = "/uapi/domestic-stock/v1/quotations/news-title";
 const TR_ID_NEWS: &str = "FHKST01010800";
 const PATH_INVEST_OPINION: &str = "/uapi/domestic-stock/v1/quotations/invest-opinion";
@@ -16,11 +17,12 @@ const TR_ID_SEARCH_STOCK: &str = "CTPF1002R";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DividendInfo {
-    pub std_dt: String,
+    pub record_date: String,
+    pub sht_cd: String,
+    pub divi_kind: String,
     pub per_sto_divi_amt: String,
     pub divi_rate: String,
-    pub divi_kind: String,
-    pub stck_bsop_date: String,
+    pub divi_pay_dt: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -56,16 +58,30 @@ pub async fn get_dividends<C>(client: &C, stock_code: &str) -> Result<Vec<Divide
 where
     C: ApiClient + Sync,
 {
+    // One page holds 100 rows (measured 2026-10-19); 5y of monthly payouts is ~60, so no tr_cont paging is needed.
+    // shortcut: fixed window (5y back, 1y ahead for announced schedules); add range flags and paging if users need older history.
+    let today = Local::now().date_naive();
     let params = HashMap::from([
-        ("SHR_ISCD".to_string(), stock_code.to_string()),
-        ("SHR_YY".to_string(), "".to_string()),
-        ("CTX_AREA_FK".to_string(), "".to_string()),
-        ("CTX_AREA_NK".to_string(), "".to_string()),
+        ("CTS".to_string(), "".to_string()),
+        ("GB1".to_string(), "0".to_string()),
+        (
+            "F_DT".to_string(),
+            (today - Duration::days(365 * 5))
+                .format("%Y%m%d")
+                .to_string(),
+        ),
+        (
+            "T_DT".to_string(),
+            (today + Duration::days(365)).format("%Y%m%d").to_string(),
+        ),
+        ("SHT_CD".to_string(), stock_code.to_string()),
+        ("HIGH_GB".to_string(), "".to_string()),
     ]);
     let response = client
         .get_json(PATH_DIVIDEND, TR_ID_DIVIDEND, &params)
         .await?;
-    parse_output(response, "dividend")
+    ensure_success(&response, "dividend")?;
+    serde_json::from_value(response["output1"].clone()).context("parsing dividend response")
 }
 
 pub async fn get_news<C>(client: &C, stock_code: &str) -> Result<Vec<NewsItem>>
@@ -167,12 +183,14 @@ mod tests {
                 "rt_cd": "0",
                 "msg_cd": "MCA00000",
                 "msg1": "정상처리",
-                "output": [{
-                    "std_dt": "20251231",
+                "output1": [{
+                    "record_date": "20251231",
+                    "sht_cd": "005930",
+                    "divi_kind": "결산",
+                    "face_val": "100",
                     "per_sto_divi_amt": "361",
-                    "divi_rate": "2.1",
-                    "divi_kind": "현금배당",
-                    "stck_bsop_date": "20251230"
+                    "divi_rate": "361.00",
+                    "divi_pay_dt": "2026/04/17"
                 }]
             }),
             call: call.clone(),
@@ -184,7 +202,10 @@ mod tests {
         let call = call.lock().unwrap().clone().unwrap();
         assert_eq!(call.path, PATH_DIVIDEND);
         assert_eq!(call.tr_id, TR_ID_DIVIDEND);
-        assert_eq!(call.params["SHR_ISCD"], "005930");
+        assert_eq!(call.params["SHT_CD"], "005930");
+        assert_eq!(call.params["CTS"], "");
+        assert_eq!(call.params["GB1"], "0");
+        assert!(call.params["F_DT"] < call.params["T_DT"]);
     }
 
     #[tokio::test]

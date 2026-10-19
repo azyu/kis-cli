@@ -2208,15 +2208,18 @@ async fn run_info(runtime: &Runtime, args: cli::InfoArgs, writer: &mut dyn Write
                 .into_iter()
                 .map(|item| {
                     vec![
-                        item.std_dt,
+                        item.record_date,
                         item.divi_kind,
                         item.per_sto_divi_amt,
                         format!("{}%", item.divi_rate),
+                        item.divi_pay_dt,
                     ]
                 })
                 .collect::<Vec<_>>();
-            let table =
-                render::render_table(&["기준일", "배당종류", "주당배당금", "배당율"], &rows);
+            let table = render::render_table(
+                &["기준일", "배당종류", "주당배당금", "액면배당률", "지급일"],
+                &rows,
+            );
             writeln!(writer, "{table}")?;
         }
         cli::InfoCommand::News(args) => {

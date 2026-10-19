@@ -88,3 +88,5 @@
 - [x] WebSocket approval key 발급 (`/oauth2/Approval`) — Agent: Main
 - [x] WebSocket 실시간 시세 1차 (연결/구독/해제/기본 재연결) — Agent: Main
 - [x] 해외 REST/CLI 회귀 테스트 및 pagination mock 검증 — Agent: Main
+- [x] 국내 배당 조회(`info dividend`) TR ID/쿼리/응답 스키마를 공식 예제 기준으로 수정 — Agent: Domain
+- [ ] 국내 `info news`/`info opinion` 실호출 `OPSQ0002 없는 서비스 코드` 수정 (2026-10-19 실측, 공식 예제 기준 TR ID/params 재대조) — Agent: Domain
